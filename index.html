@@ -942,6 +942,158 @@ EXT(5, "Fen Bilimleri", "Güneş, Dünya ve Ay", [
             return courses;
         };
 
+        const SHOP_ITEMS = [
+            { id: 'boost', emoji: '⚡', label: '2x Puan (10 dk)', desc: '10 dakika boyunca kazandığın puanlar iki katı olur.', price: 60 },
+            { id: 'shield', emoji: '🛡️', label: 'Can Kalkanı', desc: 'Bir yanlış cevapta puanın silinmez.', price: 40 },
+            { id: 'time', emoji: '⏱️', label: 'Ekstra Süre', desc: 'Bir sonraki oyununda +15 saniye.', price: 30 },
+            { id: 'box', emoji: '🎁', label: 'Gizemli Kutu', desc: 'İçinden ne çıkacağı belli olmaz!', price: 35 }
+        ];
+
+        function RaceGame({ getQuestion, onPoints, penalty, onFinish, onRestart, onExit, extraTime }) {
+            const canvasRef = useRef(null);
+            const S = useRef(null);
+            const cb = useRef({});
+            cb.current = { getQuestion, onPoints, penalty, onFinish };
+            const T0 = 75 + (extraTime ? 15 : 0);
+            const [hud, setHud] = useState({ lives: 3, time: T0, net: 0, coins: 0 });
+            const [q, setQ] = useState(null);
+            const [fb, setFb] = useState(null);
+            const [over, setOver] = useState(false);
+            const W = 300, H = 440, LW = 100, carY = H - 90;
+
+            const move = (d) => { const s = S.current; if (s && !s.paused && !s.over) s.lane = Math.max(0, Math.min(2, s.lane + d)); };
+
+            useEffect(() => {
+                S.current = { lane: 1, x: 150, obs: [], coins: [], speed: 2.6, spawn: 300, road: 0, paused: false, over: false, lives: 3, time: T0, net: 0, coinsN: 0, last: 0 };
+                const cv = canvasRef.current; const ctx = cv.getContext('2d');
+                let raf;
+                const finish = () => { const s = S.current; s.over = true; setOver(true); cb.current.onFinish(); };
+                const loop = (ts) => {
+                    const s = S.current;
+                    const dt = Math.min(40, ts - (s.last || ts)); s.last = ts;
+                    if (!s.paused && !s.over) {
+                        const f = dt / 16;
+                        s.road = (s.road + s.speed * f * 1.6) % 40;
+                        s.speed = Math.min(5, s.speed + dt * 0.00006);
+                        s.x += (s.lane * LW + LW / 2 - s.x) * 0.25;
+                        s.spawn -= dt;
+                        if (s.spawn <= 0) {
+                            const lane = Math.floor(Math.random() * 3);
+                            if (Math.random() < 0.6) s.obs.push({ lane, y: -50 }); else s.coins.push({ lane, y: -30 });
+                            s.spawn = 750 + Math.random() * 450 - s.speed * 40;
+                        }
+                        s.obs.forEach(o => { o.y += s.speed * f * 1.6; });
+                        s.coins.forEach(c => { c.y += s.speed * f * 1.6; });
+                        for (const o of s.obs) {
+                            if (!o.hit && o.lane === s.lane && o.y > carY - 40 && o.y < carY + 60) {
+                                o.hit = true; s.paused = true; setFb(null); setQ(cb.current.getQuestion());
+                            }
+                        }
+                        s.coins = s.coins.filter(c => {
+                            if (c.lane === s.lane && c.y > carY - 30 && c.y < carY + 60) {
+                                s.coinsN += 1; s.net += 2; cb.current.onPoints(2);
+                                setHud(h => ({ ...h, coins: s.coinsN, net: s.net }));
+                                return false;
+                            }
+                            return c.y < H + 40;
+                        });
+                        s.obs = s.obs.filter(o => o.hit || o.y < H + 60);
+                    }
+                    ctx.clearRect(0, 0, W, H);
+                    ctx.fillStyle = '#1f2937'; ctx.fillRect(0, 0, W, H);
+                    ctx.fillStyle = '#facc15'; ctx.fillRect(0, 0, 4, H); ctx.fillRect(W - 4, 0, 4, H);
+                    ctx.fillStyle = '#e5e7eb';
+                    for (let y = -40 + s.road; y < H; y += 40) { ctx.fillRect(LW - 2, y, 4, 22); ctx.fillRect(2 * LW - 2, y, 4, 22); }
+                    s.coins.forEach(c => { const cx = c.lane * LW + LW / 2; ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(cx, c.y, 12, 0, 6.3); ctx.fill(); ctx.fillStyle = '#92400e'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('★', cx, c.y + 5); });
+                    s.obs.forEach(o => { if (o.hit) return; const ox = o.lane * LW + LW / 2; ctx.fillStyle = '#6b7280'; ctx.beginPath(); ctx.arc(ox, o.y, 24, 0, 6.3); ctx.fill(); ctx.fillStyle = '#374151'; ctx.beginPath(); ctx.arc(ox - 7, o.y - 6, 8, 0, 6.3); ctx.fill(); ctx.fillStyle = '#ef4444'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('?', ox + 6, o.y + 8); });
+                    const cx = s.x;
+                    ctx.fillStyle = '#ef4444'; ctx.fillRect(cx - 19, carY, 38, 66);
+                    ctx.fillStyle = '#fca5a5'; ctx.fillRect(cx - 19, carY + 4, 38, 6);
+                    ctx.fillStyle = '#0f172a'; ctx.fillRect(cx - 14, carY + 16, 28, 16); ctx.fillRect(cx - 14, carY + 44, 28, 10);
+                    ctx.fillStyle = '#111827'; ctx.fillRect(cx - 24, carY + 8, 6, 14); ctx.fillRect(cx + 18, carY + 8, 6, 14); ctx.fillRect(cx - 24, carY + 44, 6, 14); ctx.fillRect(cx + 18, carY + 44, 6, 14);
+                    raf = requestAnimationFrame(loop);
+                };
+                raf = requestAnimationFrame(loop);
+                const timer = setInterval(() => {
+                    const s = S.current;
+                    if (s.paused || s.over) return;
+                    s.time -= 1;
+                    setHud(h => ({ ...h, time: s.time }));
+                    if (s.time <= 0) finish();
+                }, 1000);
+                const key = (e) => { if (e.key === 'ArrowLeft') move(-1); if (e.key === 'ArrowRight') move(1); };
+                window.addEventListener('keydown', key);
+                return () => { cancelAnimationFrame(raf); clearInterval(timer); window.removeEventListener('keydown', key); };
+            }, []);
+
+            const answer = (opt) => {
+                if (fb || !q) return;
+                setFb({ sel: opt });
+                const ok = opt === q.a;
+                setTimeout(() => {
+                    const s = S.current;
+                    if (ok) { s.net += 10; cb.current.onPoints(10); }
+                    else { s.net -= 6; s.lives -= 1; cb.current.penalty(6); }
+                    setHud({ lives: s.lives, time: s.time, net: s.net, coins: s.coinsN });
+                    s.obs = s.obs.filter(o => !o.hit);
+                    setQ(null); setFb(null);
+                    if (s.lives <= 0) { s.over = true; setOver(true); cb.current.onFinish(); }
+                    else s.paused = false;
+                }, 1100);
+            };
+
+            return (
+                <div className="max-w-sm mx-auto select-none">
+                    <div className="flex items-center justify-between mb-3 text-sm font-black">
+                        <div className="bg-red-500/10 border border-red-500/30 px-3 py-1.5 rounded-xl">{'❤️'.repeat(Math.max(0, hud.lives))}{'🖤'.repeat(Math.max(0, 3 - hud.lives))}</div>
+                        <div className={`px-3 py-1.5 rounded-xl border ${hud.time <= 10 ? 'text-red-400 border-red-500/50 animate-pulse' : 'text-white border-white/10 bg-white/5'}`}>⏱ {hud.time}s</div>
+                        <div className="bg-amber-500/10 border border-amber-500/30 text-amber-300 px-3 py-1.5 rounded-xl">⭐ {hud.net >= 0 ? '+' : ''}{hud.net}</div>
+                    </div>
+                    <div className="relative rounded-3xl overflow-hidden border-4 border-slate-700 shadow-2xl bg-slate-800" style={{ width: '100%', aspectRatio: `${W} / ${H}` }}>
+                        <canvas ref={canvasRef} width={W} height={H} className="w-full h-full block touch-none"
+                            onPointerDown={(e) => { const r = e.currentTarget.getBoundingClientRect(); move(e.clientX - r.left < r.width / 2 ? -1 : 1); }} />
+                        {q && (
+                            <div className="absolute inset-0 bg-slate-950/92 backdrop-blur-sm p-4 flex flex-col justify-center">
+                                <p className="text-[10px] font-black uppercase text-amber-400 tracking-widest mb-2 text-center">💥 Çarpışma! Soruyu doğru bil</p>
+                                <h3 className="text-sm font-bold text-white text-center mb-4 leading-relaxed">{q.q}</h3>
+                                <div className="space-y-2">
+                                    {q.opts.map((o, i) => {
+                                        let st = 'bg-white/5 border-white/10 text-white/90';
+                                        if (fb) {
+                                            if (o === q.a) st = 'bg-emerald-500/30 border-emerald-400 text-emerald-200';
+                                            else if (o === fb.sel) st = 'bg-red-500/30 border-red-400 text-red-200';
+                                            else st = 'opacity-40 border-white/5';
+                                        }
+                                        return <button key={i} onClick={() => answer(o)} className={`w-full p-3 rounded-xl border text-left text-xs font-semibold transition-all ${st}`}>{o}</button>;
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                        {over && (
+                            <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center">
+                                <div className="text-5xl mb-3">🏁</div>
+                                <h3 className="text-2xl font-black italic uppercase mb-1">Yarış Bitti!</h3>
+                                <p className="text-xs text-white/50 mb-4">{hud.coins} yıldız topladın</p>
+                                <p className={`text-4xl font-black mb-6 ${hud.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{hud.net >= 0 ? '+' : ''}{hud.net} Puan</p>
+                                <div className="flex gap-3 w-full">
+                                    <button onClick={onExit} className="flex-1 bg-white/10 py-3 rounded-xl text-xs font-bold uppercase">Menü</button>
+                                    <button onClick={onRestart} className="flex-1 bg-emerald-600 py-3 rounded-xl text-xs font-bold uppercase">Tekrar</button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mt-4">
+                        <button onPointerDown={() => move(-1)} className="bg-slate-800 border border-white/10 py-5 rounded-2xl text-2xl font-black active:scale-95">◀</button>
+                        <button onPointerDown={() => move(1)} className="bg-slate-800 border border-white/10 py-5 rounded-2xl text-2xl font-black active:scale-95">▶</button>
+                    </div>
+                    <p className="text-[10px] text-white/40 text-center mt-3">Taşlara çarparsan soru çıkar. Yıldızlar +2 puan, doğru cevap +10, yanlış cevap -6 ve bir can.</p>
+                    <button onClick={onExit} className="w-full mt-3 text-[10px] text-white/30 uppercase font-bold">← Oyun Salonuna Dön</button>
+                </div>
+            );
+        }
+
+
+
         function App() {
             const [firebaseUser, setFirebaseUser] = useState(null); 
             const [view, setView] = useState('login'); 
@@ -974,6 +1126,14 @@ EXT(5, "Fen Bilimleri", "Güneş, Dünya ve Ay", [
             const pendingRef = useRef(null);
             const registeringRef = useRef(false);
             const userIdRef = useRef(null);
+            const [boostUntil, setBoostUntil] = useState(0);
+            const [tick, setTick] = useState(0);
+            const [inv, setInv] = useState({ shield: 0, time: 0 });
+            const [giftBox, setGiftBox] = useState(null);
+            const [gameFb, setGameFb] = useState(null);
+            const [raceKey, setRaceKey] = useState(0);
+            const [raceExtra, setRaceExtra] = useState(false);
+            const tmdQRef = useRef(null);
             const annIdsRef = useRef(new Set());
             const annLoadedRef = useRef(false);
             const [toast, setToast] = useState(null);
@@ -998,7 +1158,8 @@ EXT(5, "Fen Bilimleri", "Güneş, Dünya ve Ay", [
                     if (data) {
                         userIdRef.current = fb.id;
                         sb.from('profiles').update({ is_online: true }).eq('id', fb.id).then(() => {});
-                        setUser({ ...mapProfile(data), isOnline: true });
+                        const mp = mapProfile(data);
+                        setUser({ ...mp, isOnline: true, unlocked: mp.isSpecial ? AVATARS.map(a => a.id) : mp.unlocked });
                         setView(v => (v === 'login' ? 'dashboard' : v));
                     } else if (!error) { await sb.auth.signOut(); }
                 };
@@ -1261,7 +1422,7 @@ EXT(5, "Fen Bilimleri", "Güneş, Dünya ve Ay", [
                 setAnsState({ sel: opt, show: true, correct: currentQuestion.a });
                 
                 if (isCorrect) updateUserPoints(10);
-                else updateUserPoints(-6);
+                else penalty(6);
 
                 setTimeout(() => {
                 const nextCorrect = isCorrect ? quiz.correct + 1 : quiz.correct;
@@ -1270,19 +1431,149 @@ EXT(5, "Fen Bilimleri", "Güneş, Dünya ve Ay", [
                     setAnsState({ sel: null, show: false, correct: null });
                 } else {
                     setAnalysis({ score: ((nextCorrect / quiz.questions.length) * 100).toFixed(0), correct: nextCorrect, total: quiz.questions.length });
+                maybeGift();
                     setQuiz(null);
                     setAnsState({ sel: null, show: false, correct: null });
                 }
                 }, 2800);
             };
 
+            const userRef = useRef(user);
+            userRef.current = user;
+            const boostLeft = (void tick, Math.max(0, Math.ceil((boostUntil - Date.now()) / 1000)));
+
+            useEffect(() => {
+                if (boostUntil <= Date.now()) return;
+                const t = setInterval(() => setTick(x => x + 1), 1000);
+                return () => clearInterval(t);
+            }, [boostUntil]);
+
+            useEffect(() => {
+                if (!user?.id) return;
+                setBoostUntil(0); setInv({ shield: 0, time: 0 });
+                try {
+                    const b = parseInt(localStorage.getItem('sezan_boost_' + user.id) || '0');
+                    if (b > Date.now()) setBoostUntil(b);
+                    const iv = JSON.parse(localStorage.getItem('sezan_inv_' + user.id) || 'null');
+                    if (iv) setInv(iv);
+                } catch (e) {}
+            }, [user?.id]);
+
+            useEffect(() => {
+                if (!user?.id) return;
+                try {
+                    localStorage.setItem('sezan_boost_' + user.id, String(boostUntil));
+                    localStorage.setItem('sezan_inv_' + user.id, JSON.stringify(inv));
+                } catch (e) {}
+            }, [boostUntil, inv]);
+
             const updateUserPoints = (amount) => {
-                const newPoints = (user.points || 0) + amount;
+                if (amount > 0 && boostUntil > Date.now()) amount *= 2;
+                const cur = userRef.current || user;
+                const newPoints = (cur.points || 0) + amount;
+                userRef.current = { ...cur, points: newPoints };
                 setUser(prev => ({ ...prev, points: newPoints }));
-                if (sb && user.id && !user.isSpecial) sb.from('profiles').update({ points: newPoints }).eq('id', user.id).then(({ error }) => { if (error) console.error(error); });
+                if (sb && cur.id && !cur.isSpecial) sb.from('profiles').update({ points: newPoints }).eq('id', cur.id).then(({ error }) => { if (error) console.error(error); });
             };
 
-            const generateMathQuestion = () => {
+            const penalty = (n) => {
+                if (inv.shield > 0) { setInv(i => ({ ...i, shield: i.shield - 1 })); return; }
+                updateUserPoints(-n);
+            };
+
+            const getRaceQuestion = () => {
+                const g = parseInt(user?.grade) || 5;
+                let q;
+                if (g >= 5 && GRADE_CONTENT[g]) {
+                    const courses = Object.keys(GRADE_CONTENT[g]);
+                    const c = courses[ri(0, courses.length - 1)];
+                    const topics = Object.keys(GRADE_CONTENT[g][c]);
+                    const p = GRADE_CONTENT[g][c][topics[ri(0, topics.length - 1)]];
+                    q = typeof p === 'function' ? p() : p[ri(0, p.length - 1)];
+                } else {
+                    const a = ri(2, g * 10 + 5), b = ri(2, 9);
+                    q = g <= 2 ? numQ(`${a} + ${b} = ?`, a + b, `${a} + ${b} = ${a + b}`) : numQ(`${b} x ${ri(2, 9)} = ?`, 0, '');
+                    if (g > 2) { const x = ri(2, 9), y = ri(2, 9); q = numQ(`${x} x ${y} = ?`, x * y, `${x} x ${y} = ${x * y}`); }
+                }
+                return { q: q.q, a: q.a, opts: shuffleArray([q.a, ...q.w]), ex: q.ex };
+            };
+
+            const maybeGift = () => { if (Math.random() < 0.4) setGiftBox({ opened: false }); };
+
+            const openGift = () => {
+                const r = Math.random();
+                let text;
+                if (r < 0.55) { setBoostUntil(Math.max(Date.now(), boostUntil) + 10 * 60 * 1000); text = '⚡ 10 dakika boyunca 2x puan!'; }
+                else if (r < 0.85) { updateUserPoints(20); text = '⭐ +20 bonus puan!'; }
+                else if (r < 0.95) { updateUserPoints(50); text = '🌟 +50 süper bonus puan!'; }
+                else { setInv(i => ({ ...i, shield: i.shield + 1 })); text = '🛡️ Can Kalkanı kazandın!'; }
+                setGiftBox({ opened: true, text });
+            };
+
+            const handleBuyItem = (item) => {
+                if (!user.isSpecial && (user.points || 0) < item.price) return alert('Yetersiz Yıldız!');
+                if (!user.isSpecial) updateUserPoints(-item.price);
+                if (item.id === 'boost') setBoostUntil(Math.max(Date.now(), boostUntil) + 10 * 60 * 1000);
+                if (item.id === 'shield') setInv(i => ({ ...i, shield: i.shield + 1 }));
+                if (item.id === 'time') setInv(i => ({ ...i, time: i.time + 1 }));
+                if (item.id === 'box') setGiftBox({ opened: false });
+            };
+
+            const startMixed = () => {
+                const qs = Array.from({ length: 10 }, () => getRaceQuestion());
+                setQuiz({ current: 0, correct: 0, topic: 'Karışık Test', questions: qs });
+                setAnsState({ sel: null, show: false, correct: null });
+                setShowStore(false); setView('dashboard');
+            };
+
+            const startRace = () => {
+                const use = inv.time > 0;
+                if (use) setInv(i => ({ ...i, time: i.time - 1 }));
+                setRaceExtra(use); setRaceKey(k => k + 1); setGameState('race');
+            };
+
+            // --- Sezan TMD yerel zekâ ---
+            const tmdSay = (text) => setChat(prev => [...prev, { role: 'bot', text }]);
+            const tmdAsk = () => {
+                const q = getRaceQuestion(); tmdQRef.current = q;
+                const L = ['A', 'B', 'C', 'D'];
+                tmdSay('📝 Soru:\n' + q.q + '\n\n' + q.opts.map((o, i) => L[i] + ') ' + o).join('\n') + '\n\nCevabı yaz: A, B, C, D ya da şıkkın kendisi!');
+            };
+            const tmdCheck = (msg) => {
+                const q = tmdQRef.current; if (!q) return false;
+                const m = msg.trim().toLowerCase().replace(/[).]/g, '');
+                const idx = ['a', 'b', 'c', 'd'].indexOf(m);
+                const pick = idx >= 0 && idx < q.opts.length ? q.opts[idx] : q.opts.find(o => String(o).toLowerCase() === m);
+                if (!pick) return false;
+                tmdQRef.current = null;
+                if (pick === q.a) tmdSay('✅ Harikasın, doğru! 🎉\n' + (q.ex || '') + '\n\nYeni soru için “soru sor” yaz.');
+                else tmdSay('❌ Olmadı ama sorun değil!\nDoğru cevap: ' + q.a + '\n' + (q.ex || '') + '\n\nBir tane daha dene: “soru sor”.');
+                return true;
+            };
+            const tmdLocal = (msg) => {
+                const m = msg.toLowerCase();
+                if (/soru sor|soru ver|soru|quiz|test/.test(m)) { tmdAsk(); return true; }
+                if (/ipucu|ip ucu|yardım/.test(m)) {
+                    const q = tmdQRef.current;
+                    if (!q) { tmdSay('Önce “soru sor” yaz, sonra ipucu isteyebilirsin 😉'); return true; }
+                    const wr = shuffleArray(q.opts.filter(o => o !== q.a)).slice(0, 2);
+                    tmdSay('💡 İpucu: Şunlar doğru değil → ' + wr.join(' , '));
+                    return true;
+                }
+                if (/puan|yıldız/.test(m)) { tmdSay('⭐ Şu an ' + (user?.isSpecial ? 'sınırsız' : user?.points) + ' puanın var! Ders çözerek ve oyun oynayarak artırabilirsin.'); return true; }
+                if (/merhaba|selam|naber|nasılsın|günaydın/.test(m)) { tmdSay('Merhaba ' + (user?.name?.split(' ')[0] || '') + '! 👋 Ben Sezan TMD. “soru sor” yazarsan seni çalıştırırım!'); return true; }
+                if (/teşekkür|sağ ol|sağol/.test(m)) { tmdSay('Rica ederim! 😊 Başarılar dilerim.'); return true; }
+                if (/oyun|yarış/.test(m)) { tmdSay('🎮 Üstteki oyun simgesinden Araba Yarışı ve Hızlı Matematik oynayabilirsin!'); return true; }
+                if (/mağaza|market|eşya|boost|2x|kutu/.test(m)) { tmdSay('🛒 Karakter Dolabı → Eşyalar bölümünde 2x puan, can kalkanı ve gizemli kutu alabilirsin.'); return true; }
+                if (/ders|çalış|nasıl/.test(m)) { tmdSay('📚 Her gün birkaç konu çöz, yanlışlarını ipuçlarından oku. Sonra “soru sor” ile kendini dene!'); return true; }
+                return false;
+            };
+            const tmdQuick = (text) => {
+                setChat(prev => [...prev, { role: 'user', text }]);
+                if (!tmdCheck(text)) tmdLocal(text);
+            };
+
+const generateMathQuestion = () => {
                 const grade = parseInt(user?.grade || "1");
                 const isAdvanced = grade >= 4;
                 const ops = isAdvanced ? ['+', '-', 'x'] : ['+', '-'];
@@ -1300,7 +1591,7 @@ EXT(5, "Fen Bilimleri", "Güneş, Dünya ve Ay", [
                 setCurrentMathQ({ q: `${a} ${op} ${b} = ?`, a: answer, opts });
             };
 
-            const startGame = () => { setGameState('playing'); setGameScore(0); setTimeLeft(60); generateMathQuestion(); };
+            const startGame = () => { const use = inv.time > 0; if (use) setInv(i => ({ ...i, time: i.time - 1 })); setGameState('playing'); setGameScore(0); setTimeLeft(60 + (use ? 15 : 0)); setGameFb(null); generateMathQuestion(); };
 
             useEffect(() => {
                 let timer = null;
@@ -1320,19 +1611,22 @@ EXT(5, "Fen Bilimleri", "Güneş, Dünya ve Ay", [
             }, [gameState]);
 
             const handleGameAnswer = (opt) => {
-                if (opt === currentMathQ.a) { 
-                    setGameScore(prev => prev + 10); 
-                    updateUserPoints(10); 
-                    generateMathQuestion(); 
-                } else { 
-                    setGameScore(prev => prev - 6); 
-                    updateUserPoints(-6); 
+                if (gameFb) return;
+                setGameFb({ sel: opt });
+                if (opt === currentMathQ.a) {
+                    setGameScore(prev => prev + 10);
+                    updateUserPoints(10);
+                    setTimeout(() => { setGameFb(null); generateMathQuestion(); }, 450);
+                } else {
+                    setGameScore(prev => prev - 6);
+                    penalty(6);
+                    setTimeout(() => { setGameFb(null); generateMathQuestion(); }, 1000);
                 }
             };
 
             const handleBuyAvatar = (av) => {
-                if (user.points >= av.price) {
-                const newPoints = user.points - av.price;
+                if (user.isSpecial || user.points >= av.price) {
+                const newPoints = user.isSpecial ? user.points : user.points - av.price;
                 const newUnlocked = [...user.unlocked, av.id];
                 setUser({ ...user, points: newPoints, unlocked: newUnlocked, avatar: av.id });
                 if (sb && user.id && !user.isSpecial) sb.from('profiles').update({ points: newPoints, unlocked: newUnlocked, avatar: av.id }).eq('id', user.id).then(({ error }) => { if (error) console.error(error); });
@@ -1343,7 +1637,7 @@ EXT(5, "Fen Bilimleri", "Güneş, Dünya ve Ay", [
                 if (!input.trim() || aiLoading) return;
                 const userMsg = input;
                 setChat(prev => [...prev, { role: 'user', text: userMsg }]);
-                setInput(""); setAiLoading(true);
+                setInput(""); if (tmdCheck(userMsg) || tmdLocal(userMsg)) return; if (!apiKey) { tmdSay("Bunu henüz bilmiyorum 🤔 Ama “soru sor” yazarsan seni sorularla çalıştırırım!"); return; } setAiLoading(true);
                 
                 try {
                 let retries = 5; 
@@ -1478,7 +1772,8 @@ EXT(5, "Fen Bilimleri", "Güneş, Dünya ve Ay", [
                             <Info size={18}/>
                         </button>
                         
-                        <div className="bg-amber-500/10 px-3 py-2 rounded-xl border border-amber-500/20 hidden md:flex items-center gap-1.5">
+                        {boostLeft > 0 && (<div className="bg-yellow-400/15 px-2.5 py-2 rounded-xl border border-yellow-400/40 flex items-center gap-1 text-yellow-300 font-black text-xs animate-pulse">⚡ 2x {Math.floor(boostLeft / 60)}:{String(boostLeft % 60).padStart(2, '0')}</div>)}
+                            <div className="bg-amber-500/10 px-3 py-2 rounded-xl border border-amber-500/20 flex items-center gap-1.5">
                             <Star size={14} className="text-amber-500 fill-amber-500 animate-pulse"/>
                             <span className="font-black text-amber-400 text-sm tracking-tight">{user?.isSpecial ? 'Sınırsız' : user?.points}</span>
                         </div>
@@ -1489,6 +1784,25 @@ EXT(5, "Fen Bilimleri", "Güneş, Dünya ve Ay", [
                         </div>
                     </div>
                     </header>
+                {giftBox && (
+                    <div className="fixed inset-0 z-[120] bg-black/75 backdrop-blur-sm flex items-center justify-center p-6" onClick={() => giftBox.opened && setGiftBox(null)}>
+                        <div className="text-center" onClick={(e) => e.stopPropagation()}>
+                            {!giftBox.opened ? (
+                                <button onClick={openGift} className="group">
+                                    <div className="w-40 h-40 mx-auto rounded-[2.5rem] bg-gradient-to-br from-pink-500 via-fuchsia-500 to-amber-400 shadow-[0_0_60px_rgba(236,72,153,0.6)] flex items-center justify-center text-7xl animate-bounce group-hover:scale-110 transition-transform border-4 border-white/30">🎁</div>
+                                    <p className="mt-6 text-2xl font-black italic uppercase tracking-widest text-white animate-pulse">Tıkla!</p>
+                                    <p className="text-xs text-white/50 mt-1">Sürpriz bir kutu kazandın</p>
+                                </button>
+                            ) : (
+                                <div className="bg-slate-900 border border-amber-400/40 rounded-[2.5rem] p-10 shadow-[0_0_60px_rgba(251,191,36,0.3)] animate-in zoom-in-95">
+                                    <div className="text-6xl mb-4">✨</div>
+                                    <h3 className="text-2xl font-black text-amber-300 mb-6">{giftBox.text}</h3>
+                                    <button onClick={() => setGiftBox(null)} className="bg-amber-500 text-slate-900 font-black uppercase text-xs px-8 py-3 rounded-2xl">Harika!</button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
                 {toast && (
                     <div onClick={() => setToast(null)} className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[92%] max-w-md bg-blue-600 text-white p-4 rounded-2xl shadow-2xl border border-blue-300/30 cursor-pointer">
                         <p className="text-[10px] font-black uppercase tracking-wider opacity-80 flex items-center gap-1"><Megaphone size={12}/> Yeni Duyuru • {toast.author}</p>
@@ -1576,7 +1890,37 @@ EXT(5, "Fen Bilimleri", "Güneş, Dünya ve Ay", [
                         </div>
 
                         </div>
-                    ) : view === 'purchase' ? (
+                    
+                ) : view === 'items' ? (
+                    <div className="max-w-2xl mx-auto py-4 animate-in fade-in">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-black italic uppercase text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-pink-300">Eşya Mağazası</h2>
+                            <div className="flex gap-2">
+                                <button onClick={() => { setView('dashboard'); setShowStore(true); }} className="px-3 py-2 bg-slate-800 border border-white/10 rounded-xl text-[10px] font-bold uppercase">Karakterler</button>
+                                <button onClick={() => setView('dashboard')} className="p-2.5 bg-slate-800 border border-white/10 rounded-full"><X size={16}/></button>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2 mb-5 text-[11px] font-bold">
+                            <span className="bg-amber-500/10 border border-amber-500/30 text-amber-300 px-3 py-1.5 rounded-xl">⭐ {user?.isSpecial ? 'Sınırsız' : user?.points}</span>
+                            <span className="bg-blue-500/10 border border-blue-500/30 text-blue-300 px-3 py-1.5 rounded-xl">🛡️ {inv.shield}</span>
+                            <span className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 px-3 py-1.5 rounded-xl">⏱️ {inv.time}</span>
+                            {boostLeft > 0 && <span className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 px-3 py-1.5 rounded-xl">⚡ 2x {Math.floor(boostLeft / 60)}:{String(boostLeft % 60).padStart(2, '0')}</span>}
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            {SHOP_ITEMS.map(it => (
+                                <div key={it.id} className="p-5 rounded-3xl bg-slate-900/70 border border-white/10 text-center flex flex-col justify-between">
+                                    <div>
+                                        <div className="text-5xl mb-2">{it.emoji}</div>
+                                        <h4 className="font-black text-sm mb-1">{it.label}</h4>
+                                        <p className="text-[10px] text-white/50 mb-3 leading-relaxed">{it.desc}</p>
+                                    </div>
+                                    <button onClick={() => handleBuyItem(it)} className={`w-full py-2.5 rounded-xl text-[11px] font-black uppercase ${user?.isSpecial || (user?.points || 0) >= it.price ? 'bg-amber-500 text-slate-900 hover:bg-amber-400' : 'bg-slate-800 text-white/30'}`}>{user?.isSpecial ? 'Ücretsiz' : `⭐ ${it.price}`}</button>
+                                </div>
+                            ))}
+                        </div>
+                        <p className="text-[10px] text-white/30 text-center mt-5">Eşyalar bu cihazda saklanır.</p>
+                    </div>
+                ) : view === 'purchase' ? (
                         <div className="max-w-md mx-auto mt-16 text-center bg-slate-900/60 border border-pink-500/30 p-10 rounded-[2.5rem]">
                             <div className="text-6xl mb-4">🛠️</div>
                             <h2 className="text-2xl font-black uppercase italic text-pink-400 mb-3">Bakımda</h2>
@@ -1613,27 +1957,58 @@ EXT(5, "Fen Bilimleri", "Güneş, Dünya ve Ay", [
                         <h2 className="text-3xl font-black italic mb-8 uppercase text-blue-400 tracking-tighter">Ekibimiz</h2>
                         <div className="bg-slate-900/80 border border-white/10 p-8 rounded-[2.5rem] space-y-8 shadow-2xl relative overflow-hidden">
                             <div className="absolute -top-10 -right-10 w-32 h-32 bg-blue-600/10 rounded-full blur-2xl"></div>
-                            <div className="relative z-10"><h3 className="text-[10px] text-blue-400 font-black uppercase tracking-[0.2em] mb-2">Yönetim</h3><p className="font-bold text-white text-lg">Yusuf T.<br/>Selim K.</p></div>
-                            <div className="relative z-10"><h3 className="text-[10px] text-emerald-400 font-black uppercase tracking-[0.2em] mb-2">Destek Ekip</h3><p className="font-bold text-white text-lg">Funda K.<br/>Görkem</p></div>
+                            <div className="relative z-10"><h3 className="text-[10px] text-blue-400 font-black uppercase tracking-[0.2em] mb-2">Yönetim</h3><p className="font-bold text-white text-lg">Selim K.<br/>Yusuf T.<br/>Görkem</p></div>
+                            <div className="relative z-10"><h3 className="text-[10px] text-emerald-400 font-black uppercase tracking-[0.2em] mb-2">Destek Ekip</h3><p className="font-bold text-white text-lg">Funda K.</p></div>
                             <div className="relative z-10"><h3 className="text-[10px] text-purple-400 font-black uppercase tracking-[0.2em] mb-2">Tasarım</h3><p className="font-bold text-white text-lg">Yusuf T.<br/>Selim K.<br/>Görkem</p></div>
                             <div className="pt-6 border-t border-white/10 mt-6 relative z-10"><p className="text-sm font-black italic text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-blue-400 tracking-wider">Sezan Studios Sunar..</p></div>
                         </div>
                         </div>
                     ) : view === 'games' ? (
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
-                        {gameState === 'menu' && (
-                            <div className="text-center py-10 max-w-lg mx-auto">
-                            <div className="w-24 h-24 bg-emerald-500/20 rounded-3xl mx-auto flex items-center justify-center mb-6 border-2 border-emerald-500/30"><Gamepad2 size={48} className="text-emerald-400" /></div>
-                            <h2 className="text-4xl font-black italic uppercase tracking-tighter text-emerald-400 mb-2">OYUN SALONU</h2>
-                            <p className="text-white/60 text-sm mb-10">Sınıf seviyene uygun eğitim oyunları oynayarak eğlen ve yıldız kazan!</p>
-                            <div className="bg-slate-900 border border-white/10 p-6 rounded-3xl text-left hover:border-emerald-500/30 transition-all cursor-pointer group" onClick={startGame}>
-                                <h3 className="font-bold text-lg text-white mb-2 group-hover:text-emerald-400">🚀 Hızlı Matematik</h3>
-                                <p className="text-xs text-white/50 mb-4">Ekrana gelen rastgele işlemleri 60 saniye içinde çözebildiğin kadar hızlı çöz! <br/> <strong className="text-red-400">DİKKAT: Yanlış cevaplarda -6 Puan silinir.</strong></p>
-                                <button className="w-full bg-emerald-600 py-3 rounded-xl font-bold uppercase text-xs">Oyuna Başla</button>
+                        {gameState === 'race' && (
+                <RaceGame key={raceKey} extraTime={raceExtra} getQuestion={getRaceQuestion}
+                    onPoints={(d) => updateUserPoints(d)} penalty={penalty} onFinish={maybeGift}
+                    onRestart={startRace} onExit={() => setGameState('menu')} />
+                )}
+                {gameState === 'menu' && (
+                <div className="max-w-2xl mx-auto py-6">
+                    <div className="relative overflow-hidden rounded-[2.5rem] p-8 mb-6 text-center border border-emerald-500/30 bg-gradient-to-br from-emerald-600/30 via-slate-900 to-indigo-700/30">
+                        <div className="absolute -top-12 -left-12 w-40 h-40 bg-emerald-500/20 rounded-full blur-3xl"></div>
+                        <div className="absolute -bottom-12 -right-12 w-40 h-40 bg-indigo-500/20 rounded-full blur-3xl"></div>
+                        <div className="relative z-10">
+                            <div className="text-6xl mb-3 animate-bounce">🎮</div>
+                            <h2 className="text-4xl font-black italic uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-cyan-300">OYUN SALONU</h2>
+                            <p className="text-white/60 text-sm mt-2">Oyna, eğlen, yıldız kazan! Doğru cevap yeşil, yanlış cevap kırmızı yanar.</p>
+                            <div className="inline-flex items-center gap-2 mt-4 bg-amber-500/15 border border-amber-500/30 text-amber-300 font-black px-4 py-2 rounded-2xl"><Star size={16} className="fill-amber-400"/> {user?.isSpecial ? 'Sınırsız' : user?.points} Puan {boostLeft > 0 && <span className="text-yellow-300">⚡2x</span>}</div>
+                        </div>
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                        <div onClick={startRace} className="cursor-pointer group p-6 rounded-3xl border border-red-500/30 bg-gradient-to-br from-red-600/20 to-slate-900 hover:scale-[1.02] transition-all">
+                            <div className="text-5xl mb-3">🏎️</div>
+                            <h3 className="font-black text-lg text-white group-hover:text-red-300">Araba Yarışı</h3>
+                            <p className="text-xs text-white/50 mt-1 mb-4">Şeritler arasında gez, yıldız topla. Taşa çarparsan soru çıkar! Doğru bil, canını koru.</p>
+                            <span className="inline-block bg-red-600 px-4 py-2 rounded-xl text-xs font-bold uppercase">Yarışa Başla</span>
+                        </div>
+                        <div onClick={startGame} className="cursor-pointer group p-6 rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-emerald-600/20 to-slate-900 hover:scale-[1.02] transition-all">
+                            <div className="text-5xl mb-3">🚀</div>
+                            <h3 className="font-black text-lg text-white group-hover:text-emerald-300">Hızlı Matematik</h3>
+                            <p className="text-xs text-white/50 mt-1 mb-4">60 saniyede çözebildiğin kadar işlem çöz. <strong className="text-red-400">Yanlışta -6 puan.</strong></p>
+                            <span className="inline-block bg-emerald-600 px-4 py-2 rounded-xl text-xs font-bold uppercase">Oyuna Başla</span>
+                        </div>
+                        <div onClick={startMixed} className="cursor-pointer group p-6 rounded-3xl border border-indigo-500/30 bg-gradient-to-br from-indigo-600/20 to-slate-900 hover:scale-[1.02] transition-all sm:col-span-2">
+                            <div className="flex items-center gap-4">
+                                <div className="text-5xl">🎯</div>
+                                <div className="flex-1">
+                                    <h3 className="font-black text-lg text-white group-hover:text-indigo-300">Karışık Test</h3>
+                                    <p className="text-xs text-white/50 mt-1">Bütün derslerden karışık 10 soru. Doğru +10, yanlış -6 puan.</p>
+                                </div>
+                                <span className="bg-indigo-600 px-4 py-2 rounded-xl text-xs font-bold uppercase">Başla</span>
                             </div>
-                            </div>
-                        )}
-                        {gameState === 'playing' && currentMathQ && (
+                        </div>
+                    </div>
+                </div>
+                )}
+                {gameState === 'playing' && currentMathQ && (
                             <div className="max-w-md mx-auto bg-slate-900 border border-white/10 rounded-[3rem] p-8 text-center relative overflow-hidden shadow-2xl">
                             <div className="absolute top-0 left-0 w-full h-1.5 bg-white/5"><div className="h-full bg-emerald-500 transition-all duration-1000" style={{width: `${(timeLeft/60)*100}%`}}></div></div>
                             <div className="flex justify-between items-center mb-10 mt-2">
@@ -1643,7 +2018,7 @@ EXT(5, "Fen Bilimleri", "Güneş, Dünya ve Ay", [
                             <h3 className="text-5xl font-black mb-12 text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-blue-400">{currentMathQ.q}</h3>
                             <div className="grid grid-cols-2 gap-3">
                                 {currentMathQ.opts.map((opt, i) => (
-                                <button key={i} onClick={() => handleGameAnswer(opt)} className="bg-slate-800 hover:bg-emerald-600 py-6 rounded-2xl text-2xl font-black transition-all active:scale-95 border border-white/5 hover:border-emerald-400">{opt}</button>
+                                <button key={i} onClick={() => handleGameAnswer(opt)} className={`py-6 rounded-2xl text-2xl font-black transition-all active:scale-95 border ${gameFb ? (opt === currentMathQ.a ? 'bg-emerald-500/40 border-emerald-400 text-emerald-200' : opt === gameFb.sel ? 'bg-red-500/40 border-red-400 text-red-200' : 'bg-slate-800 border-white/5 opacity-40') : 'bg-slate-800 hover:bg-emerald-600 border-white/5 hover:border-emerald-400'}`}>{opt}</button>
                                 ))}
                             </div>
                             </div>
@@ -1665,14 +2040,14 @@ EXT(5, "Fen Bilimleri", "Güneş, Dünya ve Ay", [
                     ) : showStore ? (
                         <div className="animate-in fade-in duration-300">
                         <div className="flex items-center justify-between mb-8">
-                            <div><h2 className="text-2xl sm:text-3xl font-black italic text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-300 uppercase tracking-tighter">KARAKTER DOLABI</h2></div>
+                            <div><h2 className="text-2xl sm:text-3xl font-black italic text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-300 uppercase tracking-tighter">KARAKTER DOLABI</h2><button onClick={() => { setShowStore(false); setView('items'); }} className="mt-2 px-3 py-1.5 bg-amber-500/15 border border-amber-500/30 text-amber-300 rounded-xl text-[10px] font-black uppercase">🛒 Eşya Mağazası</button></div>
                             <button onClick={() => setShowStore(false)} className="p-2.5 bg-slate-800 border border-white/10 rounded-full hover:bg-slate-700 transition-colors"><X size={18}/></button>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                             {AVATARS.map(av => {
                             const isUnlocked = user?.unlocked?.includes(av.id);
                             const isEquipped = user?.avatar === av.id;
-                            const canAfford = user?.points >= av.price;
+                            const canAfford = user?.isSpecial || user?.points >= av.price;
                             return (
                                 <div key={av.id} className={`p-5 rounded-3xl bg-slate-900/60 border transition-all text-center flex flex-col justify-between ${isEquipped ? 'border-blue-500 bg-blue-500/5' : 'border-white/5'}`}>
                                     <div><div className={`w-16 h-16 mx-auto mb-3 rounded-2xl flex items-center justify-center text-3xl shadow-lg ${av.color}`}>{av.emoji}</div><h4 className="font-black text-sm mb-1">{av.label}</h4><p className="text-[10px] text-white/40 uppercase mb-4">{av.price === 0 ? 'Bedava' : `${av.price} Yıldız`}</p></div>
@@ -1729,7 +2104,7 @@ EXT(5, "Fen Bilimleri", "Güneş, Dünya ve Ay", [
                         </div>
                     ) : (
                         <div className="animate-in fade-in duration-300">
-                        <div className="mb-8"><h2 className="text-2xl sm:text-3xl font-black italic uppercase tracking-tighter">Hoş Geldin, {user?.name.split(' ')[0]}!</h2><p className="text-xs text-white/40 font-bold uppercase tracking-wider">{user?.grade}. Sınıf Dersleri</p></div>
+                        <div className="mb-8"><h2 className="text-2xl sm:text-3xl font-black italic uppercase tracking-tighter">Hoş Geldin, {user?.name.split(' ')[0]}!</h2><p className="text-xs text-white/40 font-bold uppercase tracking-wider">{user?.grade}. Sınıf Dersleri</p><div className="inline-flex items-center gap-2 mt-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 font-black text-sm px-4 py-2 rounded-2xl"><Star size={16} className="fill-amber-400 text-amber-400"/> {user?.isSpecial ? 'Sınırsız' : user?.points} Puan{boostLeft > 0 && <span className="text-yellow-300 ml-1">⚡ 2x</span>}</div></div>
                         
                         {/* DUYURU PANOSU (HERKES GÖRÜR) */}
                         {sortedAnnouncements.length > 0 && (
@@ -1772,10 +2147,15 @@ EXT(5, "Fen Bilimleri", "Güneş, Dünya ve Ay", [
                         <button onClick={() => setAiOpen(false)} className="p-1 text-white/50 hover:text-white transition-all"><X size={16}/></button>
                         </div>
                         <div ref={scrollRef} className="flex-1 p-4 overflow-y-auto space-y-3 text-xs custom-scrollbar">
-                        {chat.map((msg, i) => (<div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[85%] p-3 rounded-xl leading-relaxed ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white/5 text-white/80 rounded-bl-none border border-white/5'}`}>{msg.text}</div></div>))}
+                        {chat.map((msg, i) => (<div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[85%] p-3 rounded-xl leading-relaxed whitespace-pre-line ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white/5 text-white/80 rounded-bl-none border border-white/5'}`}>{msg.text}</div></div>))}
                         {aiLoading && <div className="flex justify-start"><div className="bg-white/5 p-3 rounded-xl rounded-bl-none border flex items-center gap-2"><span className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce"></span><span className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce delay-150"></span><span className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce delay-300"></span></div></div>}
                         </div>
-                        <div className="p-3 bg-slate-950 border-t border-white/5 flex gap-2">
+                        <div className="px-3 pt-2 bg-slate-950 border-t border-white/5 flex gap-2 overflow-x-auto">
+                            <button onClick={() => tmdQuick('soru sor')} className="shrink-0 text-[10px] font-bold bg-blue-600/20 border border-blue-500/30 text-blue-300 px-3 py-1.5 rounded-full">📝 Soru sor</button>
+                            <button onClick={() => tmdQuick('ipucu')} className="shrink-0 text-[10px] font-bold bg-amber-500/15 border border-amber-500/30 text-amber-300 px-3 py-1.5 rounded-full">💡 İpucu</button>
+                            <button onClick={() => tmdQuick('puanım')} className="shrink-0 text-[10px] font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 px-3 py-1.5 rounded-full">⭐ Puanım</button>
+                        </div>
+                        <div className="p-3 bg-slate-950 flex gap-2">
                         <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' ? askAi() : null} placeholder="Soru sor..." className="flex-1 p-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-blue-500 text-xs text-white" />
                         <button onClick={askAi} disabled={aiLoading || !input.trim()} className="p-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl"><Send size={14}/></button>
                         </div>
