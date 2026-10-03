@@ -1,0 +1,1796 @@
+
+
+<!DOCTYPE html>
+<html lang="tr">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Sezan Akademi</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script type="importmap">
+            {
+                "imports": {
+                    "react": "https://esm.sh/react@18.2.0",
+                    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+                    "lucide-react": "https://esm.sh/lucide-react@0.292.0",
+                    "firebase/app": "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js",
+                    "firebase/firestore": "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js",
+                    "firebase/auth": "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"
+                }
+            }</script>
+        <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+            }
+
+            .custom-scrollbar::-webkit-scrollbar {
+                width: 6px;
+            }
+
+            .custom-scrollbar::-webkit-scrollbar-track {
+                background: rgba(255, 255, 255, 0.02);
+            }
+
+            .custom-scrollbar::-webkit-scrollbar-thumb {
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 99px;
+            }
+
+            .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                background: rgba(255, 255, 255, 0.2);
+            }
+        </style>
+    </head>
+    <body class="bg-[#070b19] text-white antialiased">
+        <div id="root"></div>
+        <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+        <script type="text/babel" data-type="module">
+            
+        import React, { useState, useEffect, useRef, useMemo } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { 
+            Calculator, ArrowLeft, Play, LogOut, Trophy, Star, BookOpen, 
+            GraduationCap, ShoppingBag, X, Send, Bot, Beaker, Globe, 
+            Sparkles, HelpCircle, ChevronRight, CheckCircle2, XCircle,
+            ShieldAlert, Users, Plus, Gamepad2, Timer, Award, Info, Medal, Zap, LayoutList,
+            Megaphone, Trash2
+        } from 'lucide-react';
+
+        // --- FIREBASE & API CONFIG ---
+        const apiKey = ""; 
+        const SUPABASE_URL = "https://iwwfaihghcbskylfwomf.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml3d2ZhaWhnaGNic2t5bGZ3b21mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA5Njc1MzEsImV4cCI6MjEwNjU0MzUzMX0._QE3h08moC__wePjsq9czGCikRkaQyCQbBIbWjJeSlE";
+        const EMAILJS_SERVICE_ID = "service_cwlzwd5";
+        const EMAILJS_TEMPLATE_ID = "template_96j0h3g";
+        const EMAILJS_PUBLIC_KEY = "YgHCxHht0KJsTftau";
+
+        let sb = null;
+        try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); }
+        catch (e) { console.error("Supabase connection error", e); }
+        const auth = sb;
+
+        const mapProfile = (r) => ({
+            id: r.id, name: r.name, grade: r.grade, points: r.points || 0,
+            avatar: r.avatar || 'standard', unlocked: r.unlocked || ['standard'],
+            isOnline: r.is_online, status: r.status || 'active', role: r.role, isPro: r.is_pro, isSpecial: r.is_special, createdAt: r.created_at
+        });
+
+        const shuffleArray = (array) => {
+            const arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        };
+
+        const generateId = () => Math.random().toString(36).substr(2, 9);
+
+        const AVATARS = [
+            { id: 'standard', label: 'Öğrenci', emoji: '👨‍🎓', price: 0, color: 'bg-slate-700' },
+            { id: 'scientist', label: 'Bilim İnsanı', emoji: '👨‍🔬', price: 100, color: 'bg-emerald-600' },
+            { id: 'astronaut', label: 'Astronot', emoji: '👨‍🚀', price: 250, color: 'bg-blue-600' },
+            { id: 'ninja', label: 'Matematik Ninjası', emoji: '🥷', price: 500, color: 'bg-red-600' },
+            { id: 'wizard', label: 'Bilgi Büyücüsü', emoji: '🧙‍♂️', price: 750, color: 'bg-purple-600' },
+            { id: 'robot', label: 'Yapay Zeka', emoji: '🤖', price: 1000, color: 'bg-indigo-600' },
+            { id: 'king', label: 'Akademi Kralı', emoji: '👑', price: 2000, color: 'bg-amber-500' },
+        ];
+
+        // --- ORİJİNAL DERSLER VE KONULAR ---
+        const BASE_TOPICS = {
+            "Matematik": ["Doğal Sayılar", "Dört İşlem", "Kesirler", "Geometri"],
+            "Türkçe": ["Okuma Anlama", "Sözcükte Anlam", "Yazım Kuralları", "Cümlede Anlam"],
+            "Hayat Bilgisi": ["Okulumuzda Hayat", "Evimizde Hayat", "Sağlıklı Hayat"], 
+            "Fen Bilimleri": ["Güneş, Dünya ve Ay", "Canlılar Dünyası", "Maddenin Halleri"], 
+            "Sosyal Bilgiler": ["Birey ve Toplum", "Kültür ve Miras", "İnsanlar ve Yerler"] 
+        };
+
+        // --- DOLU DOLU SORU BANKASI ---
+        const QUESTION_BANK = {
+            "Matematik": {
+                "Doğal Sayılar": [
+                    { q: "5, 0, 8, 3 rakamlarıyla yazılabilecek en büyük 4 basamaklı sayı kaçtır?", a: "8530", w: ["8350", "8053", "5830"], ex: "En büyük basamağa en büyük rakam gelmelidir." },
+                    { q: "7 yüzlük, 4 onluk, 2 birlikten oluşan sayı kaçtır?", a: "742", w: ["724", "472", "247"], ex: "Yüzler basamağı 7, onlar 4, birler 2'dir." },
+                    { q: "20'den küçük asal sayılar kaç tanedir?", a: "8", w: ["7", "9", "6"], ex: "2, 3, 5, 7, 11, 13, 17, 19 (Toplam 8 tane)" },
+                    { q: "Binler basamağı 3 olan sayı hangisidir?", a: "3.450", w: ["4.350", "5.003", "1.300"], ex: "Binler basamağı sağdan 4. basamaktır." },
+                    { q: "En küçük iki basamaklı tek doğal sayı kaçtır?", a: "11", w: ["10", "13", "9"], ex: "10 çifttir, 11 ise en küçük tek iki basamaklı sayıdır." }
+                ],
+                "Dört İşlem": [
+                    { q: "125 x 4 = ?", a: "500", w: ["400", "450", "600"], ex: "125'i 4 ile çarparsak 500 elde ederiz." },
+                    { q: "348 + 152 = ?", a: "500", w: ["490", "510", "480"], ex: "Toplam: 348+152=500" },
+                    { q: "72 / 8 = ?", a: "9", w: ["8", "7", "6"], ex: "Çarpım tablosunda 9x8=72'dir." },
+                    { q: "1000 - 450 = ?", a: "550", w: ["450", "650", "500"], ex: "1000'den 450 çıkarsa 550 kalır." },
+                    { q: "45'in 3 katı kaçtır?", a: "135", w: ["145", "125", "115"], ex: "45 x 3 = 135" }
+                ],
+                "Kesirler": [
+                    { q: "Yarım, kesir olarak nasıl ifade edilir?", a: "1/2", w: ["1/4", "1/3", "2/1"], ex: "Bir bütünün iki eş parçasından biri 1/2'dir." },
+                    { q: "3/4 kesri için hangisi doğrudur?", a: "Basit kesirdir", w: ["Bileşik kesirdir", "Tam sayılı kesirdir", "Bütün kesirdir"], ex: "Payı paydasından küçük olan kesirler basit kesirdir." },
+                    { q: "Çeyrek nedir?", a: "1/4", w: ["1/2", "1/3", "1/5"], ex: "Bir bütünün dörtte biri çeyrektir." },
+                    { q: "Payı paydasından büyük olan kesirlere ne denir?", a: "Bileşik kesir", w: ["Basit kesir", "Yarım kesir", "Tam kesir"], ex: "Payı paydasına eşit ya da büyükse bileşiktir." },
+                    { q: "1 tam içinde kaç çeyrek vardır?", a: "4", w: ["2", "3", "8"], ex: "Bir elmayı 4 çeyreğe bölebilirsiniz." }
+                ],
+                "Geometri": [
+                    { q: "Bir üçgenin iç açıları toplamı kaç derecedir?", a: "180", w: ["90", "360", "270"], ex: "Tüm üçgenlerin iç açıları toplamı 180 derecedir." },
+                    { q: "Bütün kenarları birbirine eşit ve dik açı olan dörtgen nedir?", a: "Kare", w: ["Dikdörtgen", "Yamuk", "Paralelkenar"], ex: "Kare, kenarları eşit ve açıları 90 derecedir." },
+                    { q: "Çemberin merkezinden geçen doğru parçasına ne denir?", a: "Çap", w: ["Yarıçap", "Yay", "Kiriş"], ex: "Merkezden geçen ve iki ucunda çemberi kesen çizgi çaptır." },
+                    { q: "Üç kenarı olan çokgene ne ad verilir?", a: "Üçgen", w: ["Dörtgen", "Kare", "Beşgen"], ex: "Üç kenarı ve üç köşesi vardır." },
+                    { q: "Karenin kaç köşesi vardır?", a: "4", w: ["3", "5", "6"], ex: "Kare 4 kenarlı ve 4 köşeli bir geometrik şekildir." }
+                ]
+            },
+            "Türkçe": {
+                "Okuma Anlama": [
+                    { q: "Bir metnin asıl anlatmak istediği düşünceye ne ad verilir?", a: "Ana fikir", w: ["Konu", "Başlık", "Özet"], ex: "Yazarın vermek istediği asıl mesaja ana fikir denir." },
+                    { q: "Paragrafta üzerinde durulan konuya ne denir?", a: "Ana Konu", w: ["Ana fikir", "Yardımcı fikir", "Sonuç"], ex: "Paragrafın ne anlattığı ana konuyu verir." },
+                    { q: "Olayların sırasını belirten kelimeler hangileridir?", a: "Önce, sonra", w: ["Fakat, ama", "Çünkü, bu yüzden", "Veya, ya da"], ex: "Olayların oluş sırasını 'önce, sonra' gibi kelimeler belirtir." },
+                    { q: "Hikayede olayın geçtiği mekana ne denir?", a: "Yer", w: ["Zaman", "Kahraman", "Olay örgüsü"], ex: "Mekan, olayın yaşandığı çevre veya yerdir." },
+                    { q: "Hikayedeki asıl karaktere ne ad verilir?", a: "Başkahraman", w: ["Yazar", "Anlatıcı", "Şair"], ex: "Olayların merkezindeki kişi başkahramandır." }
+                ],
+                "Sözcükte Anlam": [
+                    { q: "'Cimri' kelimesinin zıt anlamlısı nedir?", a: "Cömert", w: ["Fakir", "Zengin", "Pinti"], ex: "Cimri (pinti) kelimesinin zıttı cömerttir." },
+                    { q: "Misafir kelimesinin eş anlamlısı nedir?", a: "Konuk", w: ["Dost", "Akraba", "Komşu"], ex: "Misafir ve konuk aynı anlama gelir." },
+                    { q: "'Göz' kelimesi aşağıdaki cümlelerin hangisinde mecaz anlamda kullanılmıştır?", a: "Öğretmenin gözüne girdi.", w: ["Gözüm çok ağrıyor.", "Gözlüğüm kırıldı.", "Gözleri mavi renkti."], ex: "'Göze girmek' deyimdir, mecaz anlamlıdır." },
+                    { q: "Siyah kelimesinin zıt anlamlısı nedir?", a: "Beyaz", w: ["Kırmızı", "Karanlık", "Mavi"], ex: "Siyahın zıttı ak veya beyazdır." },
+                    { q: "Yazılışları aynı anlamları farklı olan kelimelere ne denir?", a: "Eş sesli (sesteş)", w: ["Eş anlamlı", "Zıt anlamlı", "Mecaz"], ex: "Örneğin yüz (sayı) ve yüz (surat)." }
+                ],
+                "Yazım Kuralları": [
+                    { q: "Aşağıdaki cümlelerin hangisinde yazım yanlışı vardır?", a: "Ahmet'de bizimle gelecek.", w: ["Ayşe okula gitti.", "Kedim çok sevimli.", "Ankara başkentimizdir."], ex: "Bağlaç olan 'de/da' ayrı yazılmalıdır: 'Ahmet de...'" },
+                    { q: "Özel isimlere getirilen ekler hangi işaretle ayrılır?", a: "Kesme işareti", w: ["Virgül", "Nokta", "Tırnak işareti"], ex: "Özel isimlere gelen çekim ekleri kesme işareti (') ile ayrılır." },
+                    { q: "Cümle sonuna hangi noktalama işareti konmaz?", a: "Virgül", w: ["Nokta", "Soru işareti", "Ünlem"], ex: "Virgül cümle ortasında duraklamak için konur." },
+                    { q: "Soru bildiren cümlelerin sonuna ne konur?", a: "Soru işareti", w: ["Nokta", "Virgül", "Tırnak"], ex: "Neden, niçin, kim gibi soru cümlelerinin sonuna gelir." },
+                    { q: "Heyecan bildiren kelimelerden sonra ne konur?", a: "Ünlem", w: ["Soru işareti", "Nokta", "Kesme işareti"], ex: "Eyvah! veya İmdat! gibi kelimeler ünlem alır." }
+                ],
+                "Cümlede Anlam": [
+                    { q: "Hangisi bir 'sebep-sonuç' cümlesidir?", a: "Yağmur yağdığı için ıslandık.", w: ["Yarın sinemaya gideceğiz.", "Kitap okumayı çok seviyorum.", "Çok güzel bir gün."], ex: "'İçin' kelimesi sebep belirtmiştir." },
+                    { q: "Hangisi öznel bir yargıdır?", a: "En güzel renk mavidir.", w: ["Türkiye'nin başkenti Ankara'dır.", "Su 100 derecede kaynar.", "Bir hafta 7 gündür."], ex: "Kişiden kişiye değişen düşünceler özneldir." },
+                    { q: "Hangisi nesnel bir yargıdır?", a: "Türkiye'nin başkenti Ankara'dır.", w: ["En sevdiğim yemek mantıdır.", "Bugün hava çok sıkıcı.", "Kediler köpeklerden daha sevimlidir."], ex: "Nesnel yargılar kişiye göre değişmez, kanıtlanabilir." },
+                    { q: "Hangisi koşul (şart) cümlesidir?", a: "Ödevini bitirirsen dışarı çıkabilirsin.", w: ["Karnım çok acıktı.", "Seni gördüğüme sevindim.", "Dün çok kar yağdı."], ex: "Dışarı çıkmasının şartı ödevi bitirmesidir." },
+                    { q: "Hangisi benzetme cümlesidir?", a: "Aslan gibi kükredi.", w: ["Hızlı koştu.", "Kırmızı kazak aldı.", "Okula geç kaldı."], ex: "'Gibi' edatı kullanılarak aslana benzetilmiştir." }
+                ]
+            },
+            "Hayat Bilgisi": {
+                "Okulumuzda Hayat": [
+                    { q: "Sınıf başkanını kim seçer?", a: "Öğrenciler", w: ["Öğretmen", "Müdür", "Veliler"], ex: "Sınıf başkanı demokratik bir şekilde sınıfça seçilir." },
+                    { q: "Okulda sorun yaşadığımızda ilk kime başvurmalıyız?", a: "Nöbetçi Öğretmene", w: ["Polise", "Müdüre", "Arkadaşlarımıza"], ex: "Okuldaki acil durumlarda öncelikle nöbetçi öğretmene haber verilmelidir." },
+                    { q: "Teneffüste ne yapmalıyız?", a: "Dinlenip oyun oynamalıyız", w: ["Sınıfta ders çalışmalıyız", "Okuldan kaçmalıyız", "Çöp atmalıyız"], ex: "Teneffüsler çocukların dinlenme zamanıdır." },
+                    { q: "İstiklal Marşı'nda nasıl durmalıyız?", a: "Hazır ol", w: ["Rahat", "Oturarak", "Konuşarak"], ex: "Marşımıza saygıdan dolayı hazır ol duruşunda durulur." },
+                    { q: "Sınıf eşyalarına ne yapmalıyız?", a: "Özenli kullanmalıyız", w: ["Kırmalıyız", "Çizmeliyiz", "Eve götürmeliyiz"], ex: "Okul eşyaları hepimizindir, zarar verilmemelidir." }
+                ],
+                "Evimizde Hayat": [
+                    { q: "Aşağıdakilerden hangisi evdeki sorumluluklarımızdandır?", a: "Odamızı toplamak", w: ["Yemek yapmak", "Fatura ödemek", "İşe gitmek"], ex: "Çocukların evdeki görevlerinden biri kendi eşyalarını toplamaktır." },
+                    { q: "Aile içi kararlar alınırken ne yapılmalıdır?", a: "Herkesin fikri sorulmalı", w: ["Sadece baba karar vermeli", "Kura çekilmeli", "Komşulara sorulmalı"], ex: "Aile meclisinde herkesin görüşü değerlidir." },
+                    { q: "Akrabalarımızdan biri değildir?", a: "Öğretmenimiz", w: ["Teyzemiz", "Amcamız", "Halamız"], ex: "Öğretmen okuldaki görevlidir, kan bağımız yoktur." },
+                    { q: "Evde tasarruf için ne yapmalıyız?", a: "Gereksiz ışıkları kapatmalıyız", w: ["Suyu açık bırakmalıyız", "Televizyonu sabaha kadar açmalıyız", "Ekmekleri çöpe atmalıyız"], ex: "Kaynakları israf etmemek aile bütçesini korur." },
+                    { q: "Misafirliğe gidildiğinde nasıl davranmalıyız?", a: "Görgü kurallarına uymalıyız", w: ["Eşyaları bozmalıyız", "Bağıra bağıra konuşmalıyız", "İzinsiz odalara girmeliyiz"], ex: "Misafirlikte kibar ve nazik olunmalıdır." }
+                ],
+                "Sağlıklı Hayat": [
+                    { q: "Kişisel bakımımız için hangisini düzenli yapmalıyız?", a: "Diş fırçalamak", w: ["Televizyon izlemek", "Oyun oynamak", "Şeker yemek"], ex: "Ağız sağlığı kişisel bakımın önemli bir parçasıdır." },
+                    { q: "Günde en az kaç öğün sağlıklı beslenmeliyiz?", a: "3", w: ["1", "5", "2"], ex: "Sabah, öğle ve akşam olmak üzere 3 ana öğün yemeliyiz." },
+                    { q: "Günde ortalama kaç saat uyumalıyız?", a: "8-10 saat", w: ["3-4 saat", "1-2 saat", "15 saat"], ex: "Çocukların gelişimi için düzenli uyku şarttır." },
+                    { q: "Hangi besinler yapıcı ve onarıcıdır?", a: "Proteinler", w: ["Şekerler", "Cipsler", "Kola"], ex: "Et, süt, yumurta gibi proteinler bizi büyütür." },
+                    { q: "Hastalanınca kimin verdiği ilacı kullanmalıyız?", a: "Doktorun", w: ["Komşunun", "Kendi kararımızla", "Arkadaşımızın"], ex: "Bilinçsiz ilaç kullanımı çok tehlikelidir." }
+                ]
+            },
+            "Fen Bilimleri": {
+                "Güneş, Dünya ve Ay": [
+                    { q: "Dünya'nın kendi etrafında dönmesiyle ne oluşur?", a: "Gece ve Gündüz", w: ["Mevsimler", "Yıllar", "Güneş Tutulması"], ex: "Dünya kendi ekseni etrafında dönerken Güneş'i gören kısmı gündüz olur." },
+                    { q: "Dünya'nın Güneş etrafında dolanmasıyla ne oluşur?", a: "Mevsimler", w: ["Gece ve gündüz", "Ay tutulması", "Gelgit"], ex: "Güneş etrafındaki tur ve eksen eğikliği mevsimleri oluşturur." },
+                    { q: "Dünyamızın ısı ve ışık kaynağı nedir?", a: "Güneş", w: ["Ay", "Yıldızlar", "Gezegenler"], ex: "Güneş en büyük doğal ısı ve ışık kaynağımızdır." },
+                    { q: "Dünya'nın tek doğal uydusu nedir?", a: "Ay", w: ["Güneş", "Venüs", "Mars"], ex: "Ay, Dünya'nın çevresinde dönen doğal uydumuzdur." },
+                    { q: "En büyük gezegen hangisidir?", a: "Jüpiter", w: ["Dünya", "Mars", "Satürn"], ex: "Jüpiter Güneş Sistemi'ndeki en büyük gezegendir." }
+                ],
+                "Canlılar Dünyası": [
+                    { q: "Bitkilerin güneş enerjisiyle kendi besinini üretmesine ne denir?", a: "Fotosentez", w: ["Solunum", "Sindirim", "Boşaltım"], ex: "Bitkiler fotosentez yaparak besin ve oksijen üretir." },
+                    { q: "Suda yaşayan ve solungaçlarıyla solunum yapan canlı hangisidir?", a: "Balık", w: ["Kurbağa", "Yılan", "Timsah"], ex: "Balıklar sudaki oksijeni solungaçlarıyla alır." },
+                    { q: "Omurgası olmayan canlıya ne ad verilir?", a: "Omurgasız", w: ["Sürüngen", "Memeli", "Kuş"], ex: "İskeleti olmayanlara omurgasız denir." },
+                    { q: "Kanı pompalayan organımız hangisidir?", a: "Kalp", w: ["Mide", "Akciğer", "Beyin"], ex: "Kalp kanı vücudumuzdaki damarlara pompalar." },
+                    { q: "Uçabilen memeli hayvan hangisidir?", a: "Yarasa", w: ["Kuş", "Kartal", "Tavuk"], ex: "Yarasa memeli olduğu halde kanatları sayesinde uçabilir." }
+                ],
+                "Maddenin Halleri": [
+                    { q: "Buz eridiğinde maddenin hangi haline geçer?", a: "Sıvı", w: ["Katı", "Gaz", "Plazma"], ex: "Buz katıdır, eriyince sıvı olan suya dönüşür." },
+                    { q: "Suyun kaynayarak gaz haline geçmesine ne denir?", a: "Buharlaşma", w: ["Erime", "Donma", "Yoğuşma"], ex: "Sıvının ısı alarak gaz haline geçmesine buharlaşma denir." },
+                    { q: "Bulunduğu kabın şeklini alan ama hacmi değişmeyen madde hali nedir?", a: "Sıvı", w: ["Katı", "Gaz", "Toz"], ex: "Sıvılar akışkandır ve bulundukları kabın şeklini alırlar." },
+                    { q: "Suyun donmuş haline ne denir?", a: "Buz", w: ["Buhar", "Yağmur", "Sis"], ex: "Su ısı verince donar ve buza dönüşür." },
+                    { q: "Maddenin gaz halden sıvı hale geçmesine ne denir?", a: "Yoğuşma", w: ["Buharlaşma", "Erime", "Süblimleşme"], ex: "Bulutların yağmura dönüşmesi yoğuşmaya örnektir." }
+                ]
+            },
+            "Sosyal Bilgiler": {
+                "Birey ve Toplum": [
+                    { q: "Her insanın doğuştan sahip olduğu en temel hak nedir?", a: "Yaşama Hakkı", w: ["Eğitim Hakkı", "Seçme Hakkı", "Seyahat Hakkı"], ex: "En temel ve devredilemez hak yaşama hakkıdır." },
+                    { q: "Toplumda düzeni sağlayan kurallara genel olarak ne denir?", a: "Hukuk Kuralları", w: ["Oyun Kuralları", "Görgü Kuralları", "Gelenekler"], ex: "Devlet güvencesindeki kurallar bütününe hukuk kuralları denir." },
+                    { q: "Görevlerimizi yerine getirmeye ne denir?", a: "Sorumluluk", w: ["Hak", "Özgürlük", "Eşitlik"], ex: "Sorumluluklarımızı bilmek bizi iyi bir vatandaş yapar." },
+                    { q: "Başkasının duygularını anlamaya çalışmaya ne denir?", a: "Empati", w: ["Kıskançlık", "Saygı", "Öfke"], ex: "Kendini başkasının yerine koymaya empati denir." },
+                    { q: "Devlete şikayetlerimizi hangi belgeyle iletiriz?", a: "Dilekçe", w: ["Fatura", "Mektup", "Makbuz"], ex: "Dilekçe yazma hakkı herkesin temel haklarından biridir." }
+                ],
+                "Kültür ve Miras": [
+                    { q: "Kurtuluş Savaşı'nı başlatan olay nedir?", a: "Atatürk'ün Samsun'a çıkması", w: ["TBMM'nin açılması", "Cumhuriyetin ilanı", "Lozan Antlaşması"], ex: "19 Mayıs 1919'da Atatürk'ün Samsun'a çıkmasıyla milli mücadele başlamıştır." },
+                    { q: "Türkiye Cumhuriyeti'nin kurucusu kimdir?", a: "Mustafa Kemal Atatürk", w: ["İsmet İnönü", "Fevzi Çakmak", "Kazım Karabekir"], ex: "Ulu önder Mustafa Kemal Atatürk Türkiye Cumhuriyeti'ni kurmuştur." },
+                    { q: "Geçmişten günümüze ulaşan tarihi eşyaların sergilendiği yer neresidir?", a: "Müze", w: ["Kütüphane", "Okul", "Hastane"], ex: "Tarihi eserler müzelerde korunur ve sergilenir." },
+                    { q: "TBMM nerede açılmıştır?", a: "Ankara", w: ["İstanbul", "Erzurum", "Sivas"], ex: "TBMM 23 Nisan 1920'de Ankara'da açılmıştır." },
+                    { q: "Toplumun geçmişten günümüze taşıdığı değerlere ne denir?", a: "Kültür", w: ["Ekonomi", "Teknoloji", "Siyaset"], ex: "Kültür bir milletin ortak mirasıdır." }
+                ],
+                "İnsanlar ve Yerler": [
+                    { q: "Yön bulmamızı sağlayan araç hangisidir?", a: "Pusula", w: ["Termometre", "Barometre", "Dürbün"], ex: "Pusula'nın renkli ucu daima kuzeyi gösterir." },
+                    { q: "Üç tarafı denizlerle çevrili kara parçasına ne ad verilir?", a: "Yarımada", w: ["Ada", "Göl", "Okyanus"], ex: "Türkiye de bir yarımada ülkesidir." },
+                    { q: "Haritada dağlar hangi renkle gösterilir?", a: "Kahverengi", w: ["Mavi", "Yeşil", "Sarı"], ex: "Yükselti arttıkça haritadaki renk kahverengiye döner." },
+                    { q: "Türkiye'nin başkenti neresidir?", a: "Ankara", w: ["İstanbul", "İzmir", "Bursa"], ex: "Ankara bizim başkentimizdir." },
+                    { q: "Yeryüzü şekillerini gösteren haritalara ne denir?", a: "Fiziki Harita", w: ["Siyasi Harita", "Nüfus Haritası", "İklim Haritası"], ex: "Fiziki haritalar dağları, ovaları ve denizleri gösterir." }
+                ]
+            }
+        };
+
+        // --- 5-8. SINIF MÜFREDATI (MEB konularına göre) ---
+        const ri = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+        const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+        const fmt = (n) => String(n).replace('.', ',');
+        const mk = (q, a, wrongs, ex) => {
+            a = String(a);
+            const w = [...new Set(wrongs.map(String))].filter(x => x !== a).slice(0, 3);
+            return { q, a, w, ex };
+        };
+        const numQ = (q, a, ex) => mk(q, a, [a + 1, a - 1, a + 10, a - 10, a + 2, a * 2], ex);
+        const H = (rows) => rows.map(r => ({ q: r[0], a: r[1], w: [r[2], r[3], r[4]], ex: r[5] }));
+        const G = {
+            islem: () => { const a = ri(100, 999), b = ri(2, 9); return numQ(`${a} x ${b} = ?`, a * b, `${a} sayısını ${b} ile çarparız.`); },
+            kesir: () => { const d = ri(5, 12), x = ri(1, d - 3), y = ri(1, d - 2 - x); return mk(`${x}/${d} + ${y}/${d} = ?`, `${x + y}/${d}`, [`${x + y}/${2 * d}`, `${x * y}/${d}`, `${x + y + 1}/${d}`, `${x + y - 1}/${d}`], 'Paydalar eşitse paylar toplanır, payda aynı kalır.'); },
+            ondalik: () => { const a = ri(11, 99) / 10, b = ri(11, 99) / 10, s = Math.round((a + b) * 10) / 10; return mk(`${fmt(a)} + ${fmt(b)} = ?`, fmt(s), [fmt(Math.round((s + 0.1) * 10) / 10), fmt(Math.round((s - 0.1) * 10) / 10), fmt(s + 1), fmt(Math.max(0, s - 1))], 'Virgüller alt alta gelecek şekilde toplanır.'); },
+            yuzde: () => { const p = [10, 20, 25, 50][ri(0, 3)], n = ri(2, 20) * 20, r = n * p / 100; return numQ(`${n} sayısının %${p}'si kaçtır?`, r, `${n} x ${p} / 100 = ${r}`); },
+            ebokek: (big) => { const g = ri(2, big ? 9 : 6), m = ri(2, big ? 8 : 5), n = ri(2, big ? 8 : 5), a = g * m, b = g * n, d = gcd(a, b), l = a * b / d; return Math.random() < 0.5 ? numQ(`${a} ve ${b} sayılarının EBOB'u kaçtır?`, d, 'Ortak bölenlerin en büyüğü EBOB\'tur.') : numQ(`${a} ve ${b} sayılarının EKOK'u kaçtır?`, l, 'Ortak katların en küçüğü EKOK\'tur.'); },
+            kesirSayi: () => { const d = ri(3, 9), x = ri(1, d - 1), n = d * ri(2, 9); return numQ(`${n} sayısının ${x}/${d}'si kaçtır?`, n / d * x, `${n} ÷ ${d} x ${x}`); },
+            oran: () => { const m = ri(2, 5), n = ri(m + 1, 8), k = ri(2, 6); return numQ(`Bir sınıfta kız:erkek oranı ${m}:${n}'dir. Kız sayısı ${m * k} ise erkek sayısı kaçtır?`, n * k, `Oran ${k} ile genişletilir: ${n} x ${k}`); },
+            tamsayi: () => { const a = ri(2, 15), b = ri(2, 15), t = ri(0, 2); if (t === 0) return numQ(`(-${a}) + ${b} = ?`, -a + b, 'Zıt işaretli sayılar çıkarılır, büyüğün işareti alınır.'); if (t === 1) return numQ(`(-${a}) x ${b} = ?`, -a * b, 'Zıt işaretlilerin çarpımı negatiftir.'); return numQ(`${a} - (-${b}) = ?`, a + b, 'Eksi çarpı eksi artı eder: toplama dönüşür.'); },
+            oranti: () => { const a = ri(2, 6), p = ri(2, 9), c = ri(a + 1, 12); return numQ(`${a} defter ${a * p} TL ise ${c} defter kaç TL'dir?`, c * p, `Bir defter ${p} TL, ${c} x ${p}`); },
+            indirim: () => { const p = [10, 20, 25, 50][ri(0, 3)], n = ri(2, 10) * 100; return numQ(`${n} TL'lik bir ürüne %${p} indirim yapılırsa yeni fiyat kaç TL olur?`, n - n * p / 100, `İndirim ${n * p / 100} TL, geriye ${n - n * p / 100} TL kalır.`); },
+            denklem: () => { const x = ri(2, 9), a = ri(2, 6), b = ri(1, 15); return numQ(`${a}x + ${b} = ${a * x + b} denkleminde x kaçtır?`, x, `Önce ${b} çıkarılır, sonra ${a}'ya bölünür.`); },
+            us: () => { const a = [2, 3, 5][ri(0, 2)], m = ri(2, 6), n = ri(2, 6); return numQ(`${a}^${m} x ${a}^${n} = ${a}^? ifadesinde ? kaçtır?`, m + n, 'Tabanlar aynıysa üsler toplanır.'); },
+            kok: () => { const k = ri(4, 20); return numQ(`√${k * k} kaçtır?`, k, `${k} x ${k} = ${k * k}`); },
+            olasilik: () => { const r = ri(2, 7), b = ri(2, 7), t = r + b, d = gcd(r, t); return mk(`Torbada ${r} kırmızı ve ${b} mavi top var. Rastgele çekilen topun kırmızı olma olasılığı kaçtır?`, `${r / d}/${t / d}`, [`${b / gcd(b, t)}/${t / gcd(b, t)}`, `${r}/${b}`, `1/${t}`, `${r + 1}/${t}`], 'Olasılık = istenen durum / tüm durum'); }
+        };
+        const GRADE_CONTENT = {
+            5: {
+                "Matematik": { "Doğal Sayılarla İşlemler": G.islem, "Kesirler": G.kesir, "Ondalık Gösterim": G.ondalik, "Yüzdeler": G.yuzde },
+                "Türkçe": {
+                    "Sözcükte Anlam": H([["‘Göz’ sözcüğü hangi cümlede gerçek anlamıyla kullanılmıştır?", "Gözüme bir toz kaçtı.", "Bu işe göz yumdular.", "Gözü pek bir çocuktu.", "Onu gözünden sakındı.", "Göz organı anlamında kullanılmıştır."], ["‘Sıcak’ sözcüğü hangisinde mecaz anlamdadır?", "Bizi sıcak bir gülümsemeyle karşıladı.", "Sıcak çorbayı üfleyerek içti.", "Bugün hava çok sıcak.", "Sıcak suyla ellerini yıkadı.", "Sıcak gülümseme: samimi anlamında."]]),
+                    "Cümlede Anlam": H([["‘Yağmur yağınca oyun oynayamadık.’ cümlesinde sonuç hangisidir?", "Oyun oynayamadık.", "Yağmur yağdı.", "Hava bulutluydu.", "Dışarı çıktık.", "Neden: yağmur, sonuç: oynayamamak."], ["Hangisi bir karşılaştırma cümlesidir?", "Ali, Ahmet'ten daha hızlı koşuyor.", "Ali her gün koşuyor.", "Ali spor yapmayı seviyor.", "Ali dün koşuya gitti.", "‘Daha’ ile iki kişi kıyaslanmıştır."]]),
+                    "Yazım ve Noktalama": H([["Hangisi doğru yazılmıştır?", "Herkes", "Herkez", "Herkeş", "Hergez", "Doğrusu ‘herkes’tir."], ["Soru cümlelerinin sonuna hangi işaret konur?", "Soru işareti (?)", "Nokta (.)", "Ünlem (!)", "Virgül (,)", "Soru cümleleri soru işaretiyle biter."]])
+                },
+                "Fen Bilimleri": {
+                    "Güneş, Dünya ve Ay": H([["Dünya'nın kendi çevresinde dönmesiyle ne oluşur?", "Gece ve gündüz", "Mevsimler", "Ay tutulması", "Yıl", "Bir tam dönüş yaklaşık 24 saattir."], ["Ay, Dünya çevresindeki bir dolanımını yaklaşık ne kadar sürede tamamlar?", "Yaklaşık 1 ay", "1 gün", "1 hafta", "1 yıl", "Ay evreleri yaklaşık bir ayda tekrarlanır."]]),
+                    "Madde ve Değişim": H([["Buzun erimesi hangi hâl değişimidir?", "Erime", "Buharlaşma", "Donma", "Yoğuşma", "Katı → sıvı: erime."], ["Suyun gaz hâline geçmesine ne denir?", "Buharlaşma", "Donma", "Erime", "Katılaşma", "Sıvı → gaz: buharlaşma."]]),
+                    "Kuvvetin Ölçülmesi ve Sürtünme": H([["Kuvvetin birimi nedir?", "Newton (N)", "Kilogram (kg)", "Litre (L)", "Metre (m)", "Kuvvet dinamometre ile ölçülür, birimi Newton'dur."], ["Sürtünme kuvveti hareketin yönüne göre nasıl etki eder?", "Harekete zıt yönde", "Harekete aynı yönde", "Yukarı yönde", "Etki etmez", "Sürtünme hareketi zorlaştırır."]])
+                },
+                "Sosyal Bilgiler": {
+                    "Birey ve Toplum": H([["İnsanın doğuştan sahip olduğu haklara ne denir?", "İnsan hakları", "Ödevler", "Yasaklar", "Görevler", "İnsan hakları herkes için geçerlidir."], ["Hangisi bir sivil toplum kuruluşudur?", "Dernek", "Belediye", "Okul", "Valilik", "Dernekler gönüllü kuruluşlardır."]]),
+                    "Kültür ve Miras": H([["Kadeş Antlaşması'nı yapan Anadolu uygarlığı hangisidir?", "Hititler", "Frigler", "Lidyalılar", "Urartular", "Hititler Mısır ile yazılı antlaşma yapmıştır."], ["Parayı ilk kullanan uygarlık hangisidir?", "Lidyalılar", "Hititler", "Urartular", "Frigler", "Lidyalılar parayı kullanmıştır."]]),
+                    "İnsanlar, Yerler ve Çevreler": H([["Harita ölçeği neyi gösterir?", "Haritadaki uzaklığın gerçekteki karşılığını", "Yönleri", "Nüfusu", "Yükseltiyi", "Ölçek küçültme oranıdır."], ["Dünya'nın en büyük okyanusu hangisidir?", "Büyük Okyanus (Pasifik)", "Atlas Okyanusu", "Hint Okyanusu", "Arktik Okyanusu", "Pasifik en geniş okyanustur."]])
+                }
+            },
+            6: {
+                "Matematik": { "Çarpanlar ve Katlar": () => G.ebokek(false), "Kesirle İşlemler": G.kesirSayi, "Oran": G.oran, "Yüzdeler": G.yuzde },
+                "Türkçe": {
+                    "Sözcükte Anlam": H([["Hangisi eş anlamlı bir sözcük çiftidir?", "güzel – hoş", "sıcak – soğuk", "uzun – kısa", "gece – gündüz", "Eş anlamlılar aynı anlamdadır."], ["Yazılışı aynı, anlamı farklı sözcüklere ne denir?", "Eş sesli (sesteş)", "Zıt anlamlı", "Eş anlamlı", "Yansıma", "Örnek: yüz (sayı / vücut parçası)."]]),
+                    "Fiiller": H([["‘Çocuklar bahçede oynuyor.’ cümlesinin yüklemi hangisidir?", "oynuyor", "Çocuklar", "bahçede", "bahçede oynuyor", "Yüklem iş, oluş, durum bildirir."], ["Hangisi geçmiş zaman (-di'li) fiildir?", "geldi", "geliyor", "gelecek", "gelir", "-di eki geçmişi bildirir."]]),
+                    "Noktalama İşaretleri": H([["Eş görevli sözcükleri ayırmak için hangi işaret kullanılır?", "Virgül", "Nokta", "İki nokta", "Soru işareti", "Elma, armut, muz gibi sıralamalarda virgül kullanılır."], ["Özel adların ilk harfi nasıl yazılır?", "Büyük harfle", "Küçük harfle", "Tırnak içinde", "Kalın", "Kişi ve yer adları büyük harfle başlar."]])
+                },
+                "Fen Bilimleri": {
+                    "Güneş Sistemi ve Tutulmalar": H([["Güneş Sistemi'nin merkezinde ne bulunur?", "Güneş", "Dünya", "Ay", "Jüpiter", "Gezegenler Güneş etrafında döner."], ["Ay'ın Dünya ile Güneş arasına girmesiyle ne oluşur?", "Güneş tutulması", "Ay tutulması", "Gelgit", "Mevsimler", "Ay, Güneş'in önünü kapatır."]]),
+                    "Vücudumuzdaki Sistemler": H([["Besinlerin kana geçtiği yer neresidir?", "İnce bağırsak", "Mide", "Yemek borusu", "Kalın bağırsak", "Emilim ince bağırsakta olur."], ["Kanı vücuda pompalayan organ hangisidir?", "Kalp", "Akciğer", "Böbrek", "Karaciğer", "Kalp kasılarak kanı pompalar."]]),
+                    "Kuvvet ve Hareket": H([["Hız nasıl hesaplanır?", "Yol / Zaman", "Yol x Zaman", "Zaman / Yol", "Yol + Zaman", "Hız = yol ÷ zaman."], ["120 km yolu 2 saatte alan aracın ortalama hızı kaçtır?", "60 km/sa", "240 km/sa", "122 km/sa", "118 km/sa", "120 ÷ 2 = 60"]])
+                },
+                "Sosyal Bilgiler": {
+                    "Kültür ve Miras": H([["Türklerin kurduğu bilinen ilk büyük devlet hangisidir?", "Büyük Hun Devleti", "Göktürkler", "Uygurlar", "Karahanlılar", "Büyük Hun Devleti ilk büyük Türk devletidir."], ["Orhun Yazıtları hangi alfabeyle yazılmıştır?", "Göktürk (Orhun) alfabesi", "Latin", "Arap", "Kiril", "Göktürkler kendi alfabelerini kullanmıştır."]]),
+                    "İnsanlar, Yerler ve Çevreler": H([["Başlangıç meridyeni nereden geçer?", "Greenwich (Londra)", "Ankara", "Paris", "New York", "Boylam buradan başlar."], ["Bir yerin Ekvator'a açısal uzaklığına ne denir?", "Enlem", "Boylam", "Ölçek", "Yükselti", "Paraleller enlemi gösterir."]]),
+                    "Etkin Vatandaşlık": H([["Halkın kendi kendini yönetmesine dayanan sisteme ne denir?", "Demokrasi", "Monarşi", "Oligarşi", "Teokrasi", "Demokraside yönetim halka aittir."], ["Türkiye'de oy kullanma yaşı kaçtır?", "18", "16", "21", "25", "18 yaşını dolduranlar oy kullanır."]])
+                }
+            },
+            7: {
+                "Matematik": { "Tam Sayılarla İşlemler": G.tamsayi, "Oran Orantı": G.oranti, "Yüzdeler": G.indirim, "Denklemler": G.denklem },
+                "Türkçe": {
+                    "Deyimler ve Atasözleri": H([["‘Ağzı kulaklarına varmak’ deyiminin anlamı nedir?", "Çok sevinmek", "Çok yemek", "Kızmak", "Utanmak", "Çok mutlu olmayı anlatır."], ["‘Damlaya damlaya göl olur.’ atasözü neyi anlatır?", "Küçük birikimler zamanla büyür.", "Su israf edilmemeli.", "Yağmur göl yapar.", "Gölde yüzmek güzeldir.", "Tasarruf ve birikimi anlatır."]]),
+                    "Fiilimsiler": H([["‘Koşarak okula geldi.’ cümlesindeki fiilimsi hangisidir?", "koşarak", "geldi", "okula", "okula geldi", "-arak eki zarf-fiil yapar."], ["‘Gelen misafirleri karşıladık.’ cümlesindeki fiilimsi hangisidir?", "gelen", "misafirleri", "karşıladık", "Gelen misafirleri", "-en eki sıfat-fiil yapar."]]),
+                    "Cümlenin Ögeleri": H([["‘Ayşe kitabı masaya koydu.’ cümlesinin öznesi hangisidir?", "Ayşe", "kitabı", "masaya", "koydu", "Eylemi yapan özne: Ayşe."], ["‘Nerede?’ sorusuna cevap veren öge hangisidir?", "Yer tamlayıcısı (dolaylı tümleç)", "Özne", "Belirtili nesne", "Yüklem", "Yer bildiren öge dolaylı tümleçtir."]])
+                },
+                "Fen Bilimleri": {
+                    "Güneş Sistemi ve Ötesi": H([["Işık yılı neyin birimidir?", "Uzaklık", "Zaman", "Hız", "Kütle", "Işığın bir yılda aldığı yoldur."], ["Güneş'e en yakın gezegen hangisidir?", "Merkür", "Venüs", "Dünya", "Mars", "Merkür Güneş'e en yakındır."]]),
+                    "Hücre ve Bölünmeler": H([["Hücrenin yönetim merkezi hangisidir?", "Çekirdek", "Mitokondri", "Ribozom", "Koful", "Çekirdek hücreyi yönetir."], ["Eşey hücreleri hangi bölünmeyle oluşur?", "Mayoz", "Mitoz", "Amitoz", "İkiye bölünme", "Mayoz kromozom sayısını yarıya indirir."]]),
+                    "Saf Madde ve Karışımlar": H([["Hangisi bir karışımdır?", "Tuzlu su", "Saf su", "Demir", "Oksijen", "Tuz ve su karışmıştır."], ["Elementin en küçük yapı taşı nedir?", "Atom", "Molekül", "Hücre", "Proton", "Elementler atomlardan oluşur."]])
+                },
+                "Sosyal Bilgiler": {
+                    "Ülkemizde Nüfus": H([["Nüfus yoğunluğu nasıl bulunur?", "Nüfus ÷ Yüzölçümü", "Nüfus x Yüzölçümü", "Yüzölçümü ÷ Nüfus", "Nüfus + Yüzölçümü", "Km² başına düşen kişi sayısıdır."], ["Bir yerden başka yere yerleşmek için yapılan taşınmaya ne denir?", "Göç", "Seyahat", "Turizm", "Ticaret", "Yerleşme amaçlı taşınma göçtür."]]),
+                    "Ekonomi ve Sosyal Hayat": H([["Gelirden harcamalar çıkınca kalan paraya ne denir?", "Tasarruf", "Borç", "Vergi", "Faiz", "Biriktirilen para tasarruftur."], ["Üretici ile tüketici arasındaki alım satım faaliyeti nedir?", "Ticaret", "Tarım", "Madencilik", "Turizm", "Alım satım ticaret demektir."]]),
+                    "Türk Tarihi": H([["Malazgirt Savaşı hangi yıl yapılmıştır?", "1071", "1176", "1299", "1453", "Selçuklular 1071'de Bizans'ı yendi."], ["Malazgirt'te Bizans'ı yenen Selçuklu sultanı kimdir?", "Alparslan", "Melikşah", "Tuğrul Bey", "Kılıçarslan", "Alparslan komutandı."]])
+                }
+            },
+            8: {
+                "Matematik": { "Çarpanlar ve Katlar": () => G.ebokek(true), "Üslü İfadeler": G.us, "Kareköklü İfadeler": G.kok, "Olasılık": G.olasilik },
+                "Türkçe": {
+                    "Fiilimsiler": H([["‘Yürümek sağlığa yararlıdır.’ cümlesindeki fiilimsi türü nedir?", "İsim-fiil", "Sıfat-fiil", "Zarf-fiil", "Ek fiil", "-mek eki isim-fiil yapar."], ["‘Gülerek içeri girdi.’ cümlesindeki fiilimsi hangi türdür?", "Zarf-fiil", "İsim-fiil", "Sıfat-fiil", "Yoktur", "-erek eki zarf-fiildir."]]),
+                    "Fiillerde Çatı": H([["‘Kapı rüzgârdan açıldı.’ cümlesinin fiil çatısı nedir?", "Edilgen", "Etken", "Dönüşlü", "Ettirgen", "Eylemi yapan belli değil: edilgen."], ["‘Çocuk hızla giyindi.’ cümlesinin fiil çatısı nedir?", "Dönüşlü", "Edilgen", "İşteş", "Ettirgen", "Özne eylemi kendi üzerine yapar."]]),
+                    "Cümle Türleri": H([["‘Bu işi kim yaptı?’ cümlesi anlamca nedir?", "Soru cümlesi", "Olumsuz cümle", "Ünlem cümlesi", "Emir cümlesi", "Soru bildirir."], ["Yüklemi isim soylu sözcük olan cümleye ne denir?", "İsim cümlesi", "Fiil cümlesi", "Devrik cümle", "Kurallı cümle", "Yüklem isimse isim cümlesidir."]])
+                },
+                "Fen Bilimleri": {
+                    "Mevsimler ve İklim": H([["Mevsimlerin oluşmasının asıl nedeni nedir?", "Dünya'nın eksen eğikliği ve Güneş etrafında dolanması", "Dünya'nın kendi çevresinde dönmesi", "Güneş'e olan uzaklık", "Ay'ın hareketi", "Eksen eğikliği mevsimleri oluşturur."], ["Kuzey Yarım Küre'de 21 Haziran'da ne başlar?", "Yaz", "Kış", "İlkbahar", "Sonbahar", "Yaz gündönümü: en uzun gündüz."]]),
+                    "DNA ve Genetik Kod": H([["DNA'nın yapı birimi nedir?", "Nükleotit", "Amino asit", "Glikoz", "Yağ asidi", "DNA nükleotitlerden oluşur."], ["Genler hangi yapıda bulunur?", "Kromozom (DNA)", "Ribozom", "Koful", "Sitoplazma", "Genler DNA üzerindedir."]]),
+                    "Basınç": H([["Katı basıncı nasıl hesaplanır?", "Kuvvet / Yüzey alanı", "Kuvvet x Alan", "Alan / Kuvvet", "Kuvvet + Alan", "P = F / A"], ["Aynı kuvvette yüzey alanı küçülürse basınç ne olur?", "Artar", "Azalır", "Değişmez", "Sıfır olur", "Alan küçülünce basınç artar."]])
+                },
+                "T.C. İnkılap Tarihi ve Atatürkçülük": {
+                    "Bir Kahraman Doğuyor": H([["Mustafa Kemal Atatürk nerede doğmuştur?", "Selanik", "Ankara", "İstanbul", "İzmir", "Atatürk 1881'de Selanik'te doğdu."], ["Atatürk'ün annesinin adı nedir?", "Zübeyde Hanım", "Latife Hanım", "Fikriye Hanım", "Makbule Hanım", "Annesi Zübeyde Hanım'dır."]]),
+                    "Milli Uyanış": H([["Mustafa Kemal 19 Mayıs 1919'da hangi şehre çıkmıştır?", "Samsun", "Ankara", "İzmir", "Erzurum", "Kurtuluş Savaşı'nın başlangıcı sayılır."], ["Misak-ı Millî hangi mecliste kabul edilmiştir?", "Son Osmanlı Mebusan Meclisi", "TBMM", "Sivas Kongresi", "Lozan Konferansı", "1920'de İstanbul'da kabul edildi."]]),
+                    "Atatürkçülük": H([["Cumhuriyet hangi tarihte ilan edilmiştir?", "29 Ekim 1923", "23 Nisan 1920", "30 Ağustos 1922", "1 Kasım 1922", "Cumhuriyet 29 Ekim 1923'te ilan edildi."], ["Harf Devrimi ile hangi alfabe kabul edilmiştir?", "Latin alfabesi", "Arap alfabesi", "Kiril alfabesi", "Yunan alfabesi", "1928'de yeni Türk harfleri kabul edildi."]])
+                }
+            }
+        };
+
+        // --- İNGİLİZCE ve DİN KÜLTÜRÜ (5-8) ---
+        const V = (str) => {
+            const pairs = str.split(',').map(p => { const i = p.indexOf(':'); return [p.slice(0, i).trim(), p.slice(i + 1).trim()]; });
+            const pick = (side, ans) => shuffleArray(pairs.map(p => p[side]).filter(x => x !== ans)).slice(0, 3);
+            const out = [];
+            pairs.forEach(([en, tr]) => {
+                out.push({ q: `‘${en}’ kelimesinin Türkçe karşılığı nedir?`, a: tr, w: pick(1, tr), ex: `${en} = ${tr}` });
+                out.push({ q: `‘${tr}’ kelimesinin İngilizcesi nedir?`, a: en, w: pick(0, en), ex: `${tr} = ${en}` });
+            });
+            return out;
+        };
+        const D = (rows) => rows.map(r => ({ q: r[0], a: r[1], w: [r[2], r[3], r[4]], ex: `Doğru cevap: ${r[1]}` }));
+        const DIN = "Din Kültürü ve Ahlak Bilgisi";
+        const ADD = (g, course, topics) => { GRADE_CONTENT[g][course] = topics; };
+        ADD(5, "İngilizce", {
+            "Animals": V("cat:kedi,dog:köpek,bird:kuş,fish:balık,horse:at,cow:inek,sheep:koyun,rabbit:tavşan,lion:aslan,monkey:maymun,elephant:fil,duck:ördek,chicken:tavuk,tiger:kaplan,mouse:fare"),
+            "Food and Drinks": V("apple:elma,bread:ekmek,milk:süt,water:su,cheese:peynir,egg:yumurta,banana:muz,orange:portakal,rice:pirinç,soup:çorba,tea:çay,juice:meyve suyu,meat:et,cake:pasta,butter:tereyağı"),
+            "School and Colors": V("pencil:kalem,book:kitap,desk:sıra,teacher:öğretmen,bag:çanta,red:kırmızı,blue:mavi,green:yeşil,yellow:sarı,black:siyah,white:beyaz,eraser:silgi,ruler:cetvel,board:tahta,notebook:defter")
+        });
+        ADD(6, "İngilizce", {
+            "Family and Home": V("mother:anne,father:baba,sister:kız kardeş,brother:erkek kardeş,grandmother:büyükanne,grandfather:büyükbaba,uncle:amca,aunt:teyze,kitchen:mutfak,bedroom:yatak odası,bathroom:banyo,garden:bahçe,door:kapı,window:pencere,house:ev"),
+            "Daily Routines": V("wake up:uyanmak,get up:kalkmak,brush:fırçalamak,study:ders çalışmak,play:oynamak,sleep:uyumak,cook:yemek pişirmek,read:okumak,write:yazmak,run:koşmak,swim:yüzmek,walk:yürümek,listen:dinlemek,draw:resim çizmek,sing:şarkı söylemek"),
+            "Weather and Months": V("sunny:güneşli,rainy:yağmurlu,windy:rüzgârlı,cloudy:bulutlu,snowy:karlı,hot:sıcak,cold:soğuk,January:ocak,March:mart,June:haziran,July:temmuz,September:eylül,October:ekim,December:aralık,spring:ilkbahar")
+        });
+        ADD(7, "İngilizce", {
+            "Jobs": V("doctor:doktor,nurse:hemşire,farmer:çiftçi,pilot:pilot,police officer:polis,chef:aşçı,engineer:mühendis,driver:şoför,dentist:diş hekimi,singer:şarkıcı,painter:ressam,firefighter:itfaiyeci,waiter:garson,baker:fırıncı,lawyer:avukat"),
+            "Places in Town": V("hospital:hastane,school:okul,bank:banka,library:kütüphane,market:market,pharmacy:eczane,museum:müze,park:park,bakery:fırın,cinema:sinema,post office:postane,police station:karakol,airport:havalimanı,bus station:otogar,restaurant:restoran"),
+            "Hobbies and Feelings": V("reading:okuma,painting:resim yapma,swimming:yüzme,fishing:balık tutma,cycling:bisiklet sürme,dancing:dans etme,happy:mutlu,sad:üzgün,angry:kızgın,tired:yorgun,hungry:aç,thirsty:susamış,scared:korkmuş,excited:heyecanlı,bored:sıkılmış")
+        });
+        ADD(8, "İngilizce", {
+            "Health": V("headache:baş ağrısı,stomachache:karın ağrısı,toothache:diş ağrısı,fever:ateş,cough:öksürük,medicine:ilaç,patient:hasta,healthy:sağlıklı,exercise:egzersiz,vitamin:vitamin,rest:dinlenmek,bandage:sargı,pain:ağrı,pill:hap,nurse:hemşire"),
+            "Travel and Nature": V("passport:pasaport,ticket:bilet,suitcase:valiz,hotel:otel,map:harita,mountain:dağ,river:nehir,forest:orman,lake:göl,sea:deniz,island:ada,desert:çöl,beach:plaj,volcano:yanardağ,tourist:turist"),
+            "Technology and Environment": V("computer:bilgisayar,phone:telefon,screen:ekran,keyboard:klavye,battery:pil,recycle:geri dönüştürmek,pollution:kirlilik,energy:enerji,plastic:plastik,glass:cam,paper:kâğıt,tree:ağaç,earth:dünya,robot:robot,electricity:elektrik")
+        });
+        ADD(5, DIN, {
+            "Allah İnancı": D([["İslam'a göre Allah kaç tanedir?", "Bir", "İki", "Üç", "Dört"], ["Allah'ın güzel isimlerine ne denir?", "Esmâ-ül Hüsnâ", "Siyer", "Mushaf", "Sünnet"], ["İslam'ın son ilahi kitabı hangisidir?", "Kur'an-ı Kerim", "Tevrat", "İncil", "Zebur"], ["Kur'an'ın ilk ayetleri hangi mağarada gelmeye başlamıştır?", "Hira", "Sevr", "Uhud", "Safa"], ["İman esasları kaç tanedir?", "Altı", "Beş", "Yedi", "Dört"], ["‘Er-Rahmân’ ismi ne anlama gelir?", "Çok merhametli", "Her şeyi bilen", "Her şeye gücü yeten", "Her şeyi gören"], ["Allah'ın her şeyi bilmesi hangi sıfatıdır?", "İlim", "Kudret", "İrade", "Kelâm"], ["Allah'ın her şeye gücünün yetmesi hangi sıfatıdır?", "Kudret", "İlim", "Hayat", "Sem'"]]),
+            "İbadet": D([["Günde kaç vakit namaz farzdır?", "Beş", "Üç", "Yedi", "Dört"], ["Ramazan ayında tutulan ibadet hangisidir?", "Oruç", "Hac", "Zekât", "Cuma namazı"], ["Cuma namazı haftanın hangi günü kılınır?", "Cuma", "Pazar", "Perşembe", "Salı"], ["Namazdan önce yapılan temizliğe ne denir?", "Abdest", "Teyemmüm", "İhram", "Tavaf"], ["Zengin Müslümanların malından yoksullara verdiği paya ne denir?", "Zekât", "Kurban", "Hac", "Sa'y"], ["Hac ibadeti hangi şehirde yapılır?", "Mekke", "Medine", "Kudüs", "İstanbul"], ["Kâbe'nin etrafında yedi defa dönmeye ne denir?", "Tavaf", "Sa'y", "Vakfe", "Telbiye"], ["Ramazan Bayramı'ndan önce verilen sadakaya ne denir?", "Fitre", "Zekât", "Kurban", "Hac"]]),
+            "Hz. Muhammed'in Hayatı": D([["Hz. Muhammed hangi şehirde doğmuştur?", "Mekke", "Medine", "Taif", "Şam"], ["Peygamberimizin babasının adı nedir?", "Abdullah", "Ebu Talip", "Abdulmuttalib", "Ebu Bekir"], ["Peygamberimizin annesinin adı nedir?", "Âmine", "Hatice", "Fatıma", "Aişe"], ["Hicret hangi şehirden hangi şehre yapılmıştır?", "Mekke'den Medine'ye", "Medine'den Mekke'ye", "Mekke'den Taif'e", "Şam'dan Mekke'ye"], ["Peygamberimizin ilk eşi kimdir?", "Hz. Hatice", "Hz. Aişe", "Hz. Fatıma", "Hz. Zeynep"], ["‘El-Emin’ lakabı ne anlama gelir?", "Güvenilir", "Cesur", "Zengin", "Âlim"], ["Peygamberimiz hangi şehirde vefat etmiştir?", "Medine", "Mekke", "Taif", "Kudüs"], ["Peygamberimiz peygamberlik görevini kaç yaşında almıştır?", "40", "25", "63", "30"]])
+        });
+        ADD(6, DIN, {
+            "Peygamber İnancı": D([["Peygamberlerin doğru sözlü olmasına ne denir?", "Sıdk", "Emanet", "Fetanet", "Tebliğ"], ["Peygamberlerin güvenilir olmasına ne denir?", "Emanet", "Sıdk", "Fetanet", "Tebliğ"], ["Allah'ın emirlerini insanlara bildirmeye ne denir?", "Tebliğ", "Sıdk", "Emanet", "Fetanet"], ["Son peygamber kimdir?", "Hz. Muhammed", "Hz. İsa", "Hz. Musa", "Hz. İbrahim"], ["Kâbe'yi Hz. İbrahim ile birlikte yapan oğlu kimdir?", "Hz. İsmail", "Hz. İshak", "Hz. Yakup", "Hz. Yusuf"], ["Tevrat hangi peygambere verilmiştir?", "Hz. Musa", "Hz. İsa", "Hz. Davud", "Hz. Nuh"], ["İncil hangi peygambere verilmiştir?", "Hz. İsa", "Hz. Musa", "Hz. Davud", "Hz. İbrahim"], ["Zebur hangi peygambere verilmiştir?", "Hz. Davud", "Hz. Musa", "Hz. İsa", "Hz. Süleyman"]]),
+            "Namaz ve Hac": D([["Namaza başlarken söylenen ‘Allahu Ekber’ sözüne ne denir?", "Tekbir", "Kıyam", "Rükû", "Secde"], ["Namazda belden öne eğilmeye ne denir?", "Rükû", "Kıyam", "Secde", "Selam"], ["Namazda alnı yere koymaya ne denir?", "Secde", "Rükû", "Kıyam", "Tekbir"], ["Sabah namazının farzı kaç rekâttır?", "2", "3", "4", "5"], ["Akşam namazının farzı kaç rekâttır?", "3", "2", "4", "5"], ["Müslümanların namazda yöneldiği yer neresidir?", "Kâbe", "Mescid-i Aksa", "Hira", "Arafat"], ["Namaz vakitlerini bildiren çağrıya ne denir?", "Ezan", "Hutbe", "Tekbir", "Telbiye"], ["Hacda Arafat'ta bekleyişe ne denir?", "Vakfe", "Tavaf", "Sa'y", "Telbiye"]]),
+            "Ahlak ve Değerler": D([["Doğru söylemek hangi değerdir?", "Dürüstlük", "Cimrilik", "Kibir", "Tembellik"], ["Başkalarının acısını paylaşmak hangi değerdir?", "Merhamet", "Kibir", "Öfke", "Cimrilik"], ["Verilen sözü tutmak hangi değerdir?", "Güvenilirlik", "İsraf", "Gıybet", "Kibir"], ["Gereksiz yere harcama yapmaya ne denir?", "İsraf", "Tasarruf", "Zekât", "Sadaka"], ["Birinin arkasından kötü konuşmaya ne denir?", "Gıybet", "Yardım", "Sabır", "Şükür"], ["Nimetler için teşekkür etmeye ne denir?", "Şükür", "Sabır", "İsraf", "Kibir"], ["Başkalarına yardım etmek hangi değerle ilgilidir?", "Yardımlaşma", "Bencillik", "Kıskançlık", "Tembellik"], ["Zorluklara katlanmaya ne denir?", "Sabır", "İsraf", "Gıybet", "Kibir"]])
+        });
+        ADD(7, DIN, {
+            "Melek ve Ahiret İnancı": D([["Peygamberlere vahyi getiren melek kimdir?", "Cebrail", "Mikail", "İsrafil", "Azrail"], ["Yağmur ve rızıkla görevli melek kimdir?", "Mikail", "Cebrail", "İsrafil", "Azrail"], ["Sur'a üfleyecek melek kimdir?", "İsrafil", "Cebrail", "Mikail", "Azrail"], ["Ruhları alan melek kimdir?", "Azrail", "Cebrail", "Mikail", "İsrafil"], ["Ölümden sonraki sonsuz hayata ne denir?", "Ahiret", "Hicret", "Vahiy", "Mucize"], ["Meleklerin ortak özelliği hangisidir?", "Allah'a isyan etmemeleri", "Yemek yemeleri", "Evlenmeleri", "Uyumaları"], ["Allah'ın her şeyi önceden bilip takdir etmesine ne denir?", "Kader", "Hicret", "Vahiy", "İtikaf"], ["Kıyametten sonra yeniden dirilişe ne denir?", "Ba's", "Hicret", "Tevekkül", "İtikaf"]]),
+            "Hz. Muhammed ve Medine": D([["Hicret hangi yılda gerçekleşmiştir?", "622", "610", "632", "570"], ["Medine'nin eski adı nedir?", "Yesrib", "Taif", "Bakke", "Şam"], ["Medine'de yapılan ilk mescit hangisidir?", "Kuba Mescidi", "Mescid-i Aksa", "Ayasofya", "Mescid-i Haram"], ["Peygamberimizin Mekke'yi kan dökülmeden aldığı olaya ne denir?", "Mekke'nin Fethi", "Bedir", "Uhud", "Hendek"], ["Veda Hutbesi nerede okunmuştur?", "Arafat", "Hira", "Kuba", "Taif"], ["Peygamberimize hicrette eşlik eden arkadaşı kimdir?", "Hz. Ebu Bekir", "Hz. Ömer", "Hz. Ali", "Hz. Osman"], ["Muhacirler ile Ensar arasında kurulan kardeşliğe ne denir?", "Mü'âhât", "Hicret", "Veda", "Biat"], ["Peygamberimiz hangi yılda vefat etmiştir?", "632", "622", "610", "650"]]),
+            "Oruç ve Zekât": D([["Oruç hangi vakitler arasında tutulur?", "İmsaktan akşama kadar", "Öğleden ikindiye kadar", "Gün doğumundan öğleye kadar", "Akşamdan sabaha kadar"], ["İmsaktan önce yenen yemeğe ne denir?", "Sahur", "İftar", "Bayram", "Teravih"], ["Zekât hangi tür ibadettir?", "Malî ibadet", "Bedenî ibadet", "Kalbî ibadet", "Dilsel ibadet"], ["Ramazan'da yatsıdan sonra kılınan namaz hangisidir?", "Teravih", "Cuma", "Bayram", "Cenaze"], ["Ramazan ayının sonunda hangi bayram kutlanır?", "Ramazan Bayramı", "Kurban Bayramı", "Cumhuriyet Bayramı", "Zafer Bayramı"], ["Kurban Bayramı hangi peygamberin olayını hatırlatır?", "Hz. İbrahim", "Hz. Musa", "Hz. Nuh", "Hz. Yusuf"], ["Kur'an-ı Kerim hangi ayda indirilmeye başlanmıştır?", "Ramazan", "Şaban", "Muharrem", "Recep"], ["Oruç hangi ay boyunca farzdır?", "Ramazan", "Şevval", "Zilhicce", "Safer"]])
+        });
+        ADD(8, DIN, {
+            "Kader İnancı": D([["Allah'ın her şeyi ezelden bilip takdir etmesine ne denir?", "Kader", "Hicret", "Vahiy", "Zekât"], ["Bir işi yapıp sonucunu Allah'a bırakmaya ne denir?", "Tevekkül", "İsraf", "Gıybet", "Kibir"], ["İnsanın iyiyi ya da kötüyü seçebilme özgürlüğüne ne denir?", "İrade", "Vahiy", "Mucize", "Hicret"], ["Kader inancı insanı neye yönlendirmelidir?", "Çalışıp tevekkül etmeye", "Çalışmamaya", "Tembelliğe", "Umutsuzluğa"], ["‘Allah kimseye gücünün yeteceğinden fazlasını yüklemez’ ayeti hangi surededir?", "Bakara", "Fatiha", "İhlas", "Nas"], ["Sabır ne demektir?", "Zorluklara dayanmak", "Hemen öfkelenmek", "Kibirlenmek", "İsraf etmek"], ["Ömrün sona erdiği vakte ne denir?", "Ecel", "Rızık", "Sevap", "Günah"], ["Rızık neyi ifade eder?", "Faydalanılan her şeyi", "Sadece parayı", "Sadece yemeği", "Sadece evi"]]),
+            "Zekât ve Sadaka": D([["Karşılık beklemeden verilen yardıma ne denir?", "Sadaka", "Faiz", "Rüşvet", "Borç"], ["Zekât alabilecek kişi hangisidir?", "İhtiyaç sahibi", "Zengin kişi", "Tüccar", "Her isteyen"], ["Zekât, İslam'ın hangi esaslarından biridir?", "Şartlarından", "İman esaslarından", "Mekruhlarından", "Müstehaplarından"], ["Ramazan Bayramı'nda verilen sadakaya ne denir?", "Fitre", "Zekât", "Kurban", "Hac"], ["Kurban hangi bayramda kesilir?", "Kurban Bayramı", "Ramazan Bayramı", "Kandil", "Nevruz"], ["Yardımlaşma toplumda neyi güçlendirir?", "Dayanışmayı", "Cimriliği", "Kıskançlığı", "Bencilliği"], ["Zekât vermek hangi değeri güçlendirir?", "Paylaşmayı", "Kıskançlığı", "Bencilliği", "Savurganlığı"], ["Vakıf nedir?", "Malın hayır için ayrılması", "Kredi", "Vergi", "Borç"]]),
+            "Kur'an-ı Kerim": D([["Kur'an-ı Kerim kaç sureden oluşur?", "114", "99", "30", "6"], ["Kur'an'ın ilk suresi hangisidir?", "Fatiha", "Bakara", "İhlas", "Nas"], ["Kur'an kaç cüzdür?", "30", "114", "60", "7"], ["Kur'an'ın en uzun suresi hangisidir?", "Bakara", "Fatiha", "Kevser", "İhlas"], ["Kur'an-ı Kerim hangi dilde indirilmiştir?", "Arapça", "Türkçe", "İbranice", "Latince"], ["Kur'an'ı kurallarına uygun güzel okumaya ne denir?", "Tecvid", "Hicret", "Zekât", "Vahiy"], ["Kur'an'ın en küçük bölümüne ne denir?", "Ayet", "Sure", "Cüz", "Sayfa"], ["Kur'an yaklaşık kaç yılda indirilmiştir?", "23", "10", "40", "63"]])
+        });
+
+        // --- 5. SINIF: Türkçe / Fen / Sosyal -> konu başına 15 soru ---
+        const EXT = (g, c, t, rows) => { GRADE_CONTENT[g][c][t] = GRADE_CONTENT[g][c][t].concat(D(rows)); };
+        EXT(5, "Türkçe", "Sözcükte Anlam", [
+            ["‘Küçük’ sözcüğünün zıt anlamlısı hangisidir?", "büyük", "uzun", "kısa", "ince"],
+            ["‘Hızlı’ sözcüğünün zıt anlamlısı hangisidir?", "yavaş", "çabuk", "acele", "seri"],
+            ["‘Güzel’ sözcüğünün eş anlamlısı hangisidir?", "hoş", "çirkin", "kötü", "soğuk"],
+            ["‘Aydınlık’ sözcüğünün zıt anlamlısı hangisidir?", "karanlık", "ışık", "parlak", "beyaz"],
+            ["‘Mektep’ sözcüğünün günümüzdeki karşılığı hangisidir?", "okul", "kitap", "defter", "sınıf"],
+            ["Yazılışı aynı, anlamı farklı sözcüklere ne denir?", "Eş sesli", "Zıt anlamlı", "Eş anlamlı", "Yansıma"],
+            ["‘Şırıl şırıl’ sözcüğü hangi türdendir?", "Yansıma sözcük", "Eş anlamlı", "Zıt anlamlı", "Mecaz anlamlı"],
+            ["Bir sözcüğün gerçek anlamından uzaklaşarak kazandığı anlama ne denir?", "Mecaz anlam", "Gerçek anlam", "Eş anlam", "Zıt anlam"],
+            ["Hangisinde ‘tatlı’ sözcüğü mecaz anlamda kullanılmıştır?", "Tatlı bir sesle konuşuyordu.", "Tatlı yemeği çok sevdi.", "Bu elma çok tatlı.", "Tatlı olarak baklava seçti."],
+            ["‘Cesur’ sözcüğünün eş anlamlısı hangisidir?", "yiğit", "korkak", "tembel", "uykucu"],
+            ["‘Yaşlı’ sözcüğünün zıt anlamlısı hangisidir?", "genç", "ihtiyar", "kocaman", "eski"],
+            ["Hangi sözcük çifti zıt anlamlıdır?", "doğru – yanlış", "kitap – kalem", "masa – sıra", "araba – otomobil"],
+            ["‘Ağır’ sözcüğünün zıt anlamlısı hangisidir?", "hafif", "kalın", "büyük", "sert"]]);
+        EXT(5, "Türkçe", "Cümlede Anlam", [
+            ["‘Ayşe, çok çalıştığı için sınavı geçti.’ cümlesinde neden hangisidir?", "Çok çalışması", "Sınavı geçmesi", "Ayşe olması", "Sınavın zor olması"],
+            ["Hangisi amaç bildiren bir cümledir?", "Sağlıklı olmak için spor yapıyorum.", "Spor yaptım, yoruldum.", "Hava soğuktu.", "Yağmur yağdı."],
+            ["‘Mehmet'in boyu Ali'nin boyundan uzundur.’ cümlesi ne bildirir?", "Karşılaştırma", "Neden-sonuç", "Amaç", "Örnekleme"],
+            ["‘Kitap okumak bilgimizi artırır.’ cümlesinden hangisi çıkarılabilir?", "Okumanın bilgiyi artırdığı", "Kitapların pahalı olduğu", "Okumanın yorucu olduğu", "Bilginin gereksiz olduğu"],
+            ["Hangisi kişiden kişiye değişen (öznel) bir yargıdır?", "Bu film çok güzeldi.", "Ankara Türkiye'nin başkentidir.", "Su 100 °C'de kaynar.", "Bir hafta yedi gündür."],
+            ["Hangisi kanıtlanabilen (nesnel) bir yargıdır?", "Dünya Güneş'in etrafında döner.", "Mavi en güzel renktir.", "Yaz en güzel mevsimdir.", "Pizza en lezzetli yemektir."],
+            ["‘Zeynep, parkta arkadaşlarıyla oynadı.’ cümlesinde ‘nerede?’ sorusunun cevabı hangisidir?", "parkta", "Zeynep", "oynadı", "arkadaşlarıyla"],
+            ["Hangisi koşul bildiren bir cümledir?", "Erken kalkarsan otobüse yetişirsin.", "Otobüse yetiştim.", "Erken kalktım.", "Otobüs geç geldi."],
+            ["‘Yağmur yağdığı için maç ertelendi.’ cümlesinde sonuç hangisidir?", "Maçın ertelenmesi", "Yağmurun yağması", "Havanın bulutlu olması", "Stadın kapalı olması"],
+            ["Hangisi bir tahmin bildirir?", "Yarın yağmur yağabilir.", "Dün yağmur yağdı.", "Yağmur toprağı ıslatır.", "Yağmur durdu."],
+            ["‘Ders çalışmadan sınava girersen başarılı olamazsın.’ cümlesi ne anlatır?", "Koşul", "Karşılaştırma", "Örnekleme", "Amaç"],
+            ["Hangisinde örnek verilmiştir?", "Meyveler, örneğin elma ve armut, vitamin kaynağıdır.", "Elma bir meyvedir.", "Meyveler pahalıdır.", "Yaz geldi."],
+            ["Hangi cümlede duygu bildirilmiştir?", "Sonucu duyunca çok sevindim.", "Okul sabah sekizde başlar.", "Masa tahtadandır.", "Yarın pazar."]]);
+        EXT(5, "Türkçe", "Yazım ve Noktalama", [
+            ["Hangisi doğru yazılmıştır?", "yanlış", "yalnış", "yanlıs", "yanliş"],
+            ["‘Birçok’ sözcüğü nasıl yazılır?", "Bitişik", "Ayrı", "Kesme işaretiyle", "Tire ile"],
+            ["Özel adlara gelen ekler nasıl ayrılır?", "Kesme işaretiyle", "Tireyle", "Noktayla", "Virgülle"],
+            ["Cümle hangi harfle başlar?", "Büyük harfle", "Küçük harfle", "Rakamla", "Noktayla"],
+            ["Ünlem işareti hangi tür cümlenin sonuna konur?", "Heyecan, şaşkınlık bildiren", "Soru bildiren", "Düz anlatan", "Açıklama yapan"],
+            ["Sıralı sözcükleri ayırmada hangi işaret kullanılır?", "Virgül", "Nokta", "İki nokta", "Soru işareti"],
+            ["Konuşma çizgisi (-) nerede kullanılır?", "Diyalogda konuşanın sözünün başında", "Soru sonunda", "Sayılar arasında", "Cümle sonunda"],
+            ["‘Ya da’ bağlacı nasıl yazılır?", "Ayrı (ya da)", "Bitişik (yada)", "Kesmeli (ya'da)", "Tireli (ya-da)"],
+            ["İki nokta (:) hangi durumda kullanılır?", "Açıklama yapılacak cümlenin sonunda", "Soru sonunda", "Her cümle sonunda", "Ünlemden sonra"],
+            ["Tırnak işareti ile ne gösterilir?", "Başkasından aktarılan sözler", "Soru", "Ünlem", "Sayfa numarası"],
+            ["Hangisi doğru yazılmıştır?", "Sanatçı", "Sanatçi", "Sanadçı", "Sanatci"],
+            ["Hangisi doğru yazılmıştır?", "Yürüyüş", "Yüryüş", "Yürüyüs", "Yürüyüşş"],
+            ["Nokta (.) hangi yerde kullanılır?", "Cümle sonunda", "Soru cümlesinde", "Heyecan bildiren cümlede", "Sıralamada"]]);
+EXT(5, "Fen Bilimleri", "Güneş, Dünya ve Ay", [
+            ["Dünya'nın Güneş etrafındaki bir tam dönüşü yaklaşık ne kadar sürer?", "1 yıl", "1 gün", "1 ay", "1 hafta"],
+            ["Ay'ın Dünya'dan farklı görünümlerine ne denir?", "Ay'ın evreleri", "Tutulma", "Mevsim", "Gelgit"],
+            ["Ay'ın tamamının aydınlık görüldüğü evre hangisidir?", "Dolunay", "Yeni ay", "Son dördün", "İlk dördün"],
+            ["Ay'ın Dünya'dan hiç aydınlık görünmediği evre hangisidir?", "Yeni ay", "Dolunay", "İlk dördün", "Son dördün"],
+            ["Güneş nasıl bir gök cismidir?", "Yıldız", "Gezegen", "Uydu", "Kuyruklu yıldız"],
+            ["Dünya'nın doğal uydusu hangisidir?", "Ay", "Güneş", "Mars", "Venüs"],
+            ["Güneş tutulmasında hangi gök cismi Güneş ile Dünya arasındadır?", "Ay", "Mars", "Venüs", "Jüpiter"],
+            ["Ay tutulmasında hangi gök cismi Güneş ile Ay arasındadır?", "Dünya", "Mars", "Venüs", "Jüpiter"],
+            ["Dünya kendi etrafında hangi yönde döner?", "Batıdan doğuya", "Doğudan batıya", "Kuzeyden güneye", "Güneyden kuzeye"],
+            ["Güneş'in Dünya'ya ulaştırdığı enerji hangisidir?", "Işık ve ısı", "Ses", "Rüzgâr", "Deprem"],
+            ["Aşağıdakilerden hangisi bir gök cismidir?", "Mars", "Dağ", "Bulut", "Rüzgâr"],
+            ["Ay'ın ışığı nereden gelir?", "Güneş'ten gelen ışığı yansıtır", "Kendi ışığını üretir", "Dünya ışık verir", "Yıldızlar verir"],
+            ["Gece ve gündüzün oluşmasının nedeni nedir?", "Dünya'nın kendi ekseninde dönmesi", "Dünya'nın Güneş çevresinde dolanması", "Ay'ın dönmesi", "Güneş'in dönmesi"]]);
+        EXT(5, "Fen Bilimleri", "Madde ve Değişim", [
+            ["Suyun donma noktası kaç °C'dir?", "0", "100", "50", "-10"],
+            ["Suyun kaynama noktası kaç °C'dir?", "100", "0", "50", "200"],
+            ["Sıvının katı hâle geçmesine ne denir?", "Donma", "Erime", "Buharlaşma", "Yoğuşma"],
+            ["Gazın sıvı hâle geçmesine ne denir?", "Yoğuşma", "Buharlaşma", "Erime", "Donma"],
+            ["Isı alan bir maddenin tanecikleri nasıl hareket eder?", "Daha hızlı", "Daha yavaş", "Durur", "Yok olur"],
+            ["Hangisi fiziksel değişimdir?", "Buzun erimesi", "Demirin paslanması", "Kâğıdın yanması", "Sütün ekşimesi"],
+            ["Hangisi kimyasal değişimdir?", "Demirin paslanması", "Suyun kaynaması", "Buzun erimesi", "Suyun donması"],
+            ["Kütle hangi aletle ölçülür?", "Terazi", "Dinamometre", "Termometre", "Cetvel"],
+            ["Sıcaklık hangi aletle ölçülür?", "Termometre", "Terazi", "Dinamometre", "Pusula"],
+            ["Sıvılar için hangisi doğrudur?", "Bulundukları kabın şeklini alırlar", "Belirli şekilleri vardır", "Hacimleri yoktur", "Akışkan değildirler"],
+            ["Katılar için hangisi doğrudur?", "Belirli şekilleri vardır", "Kabın şeklini alırlar", "Her yere yayılırlar", "Akışkandırlar"],
+            ["Gazlar için hangisi doğrudur?", "Bulundukları kabı tamamen doldururlar", "Belirli şekilleri vardır", "Hacimleri sabittir", "Yayılmazlar"],
+            ["Çamaşırların kuruması hangi hâl değişimidir?", "Buharlaşma", "Erime", "Donma", "Yoğuşma"]]);
+        EXT(5, "Fen Bilimleri", "Kuvvetin Ölçülmesi ve Sürtünme", [
+            ["Kuvveti ölçmek için hangi alet kullanılır?", "Dinamometre", "Termometre", "Terazi", "Barometre"],
+            ["Kuvvet bir cismin nesini değiştirebilir?", "Hızını ve şeklini", "Rengini", "Tadını", "Kokusunu"],
+            ["Sürtünmeyi artırmak için ne yapılır?", "Yüzeyi pürüzlü yapmak", "Yüzeyi yağlamak", "Yüzeyi parlatmak", "Yüzeyi ıslatmak"],
+            ["Sürtünmeyi azaltmak için hangisi yapılır?", "Yağlama", "Kumlama", "Pürüzlendirme", "Yüzeyi kabalaştırma"],
+            ["Araç lastiklerinin dişli olmasının amacı nedir?", "Sürtünmeyi artırıp kaymayı önlemek", "Hızı artırmak", "Yakıt harcamak", "Daha güzel görünmek"],
+            ["Ellerimizi birbirine sürtünce neden ısınırız?", "Sürtünme ısı oluşturur", "Işık oluşur", "Ses kaybolur", "Kütle artar"],
+            ["İtme ve çekme neyin çeşididir?", "Kuvvetin", "Maddenin", "Enerjinin", "Isının"],
+            ["Bisiklet frenlerinde hangi kuvvet kullanılır?", "Sürtünme", "Manyetik kuvvet", "Elektrik kuvveti", "Yer çekimi"],
+            ["Hangi yüzeyde sürtünme en azdır?", "Buz", "Halı", "Kum", "Asfalt"],
+            ["Yer çekimi cisimleri hangi yöne çeker?", "Dünya'nın merkezine", "Yukarı", "Sağa", "Güneş'e"],
+            ["Dinamometre ile ne ölçülür?", "Kuvvet (ağırlık)", "Sıcaklık", "Hacim", "Uzunluk"],
+            ["Kütle ile ağırlık aynı mıdır?", "Hayır, ağırlık bir kuvvettir", "Evet, aynıdır", "Kütle bir kuvvettir", "İkisi de sıcaklıktır"],
+            ["Hangisi temas gerektirmeyen bir kuvvettir?", "Mıknatıs kuvveti", "Sürtünme", "İtme", "Çekme"]]);
+        EXT(5, "Sosyal Bilgiler", "Birey ve Toplum", [
+            ["Hangisi çocuk haklarından biridir?", "Eğitim görme hakkı", "Alışveriş yapma", "Tam gün çalışma", "Oy kullanma"],
+            ["Ailede görev paylaşımı neyi sağlar?", "Düzen ve dayanışmayı", "Karışıklığı", "Bencilliği", "Kavgayı"],
+            ["Toplumsal kuralların amacı nedir?", "Düzeni sağlamak", "Yasak koymak", "Cezalandırmak", "Eğlendirmek"],
+            ["Hangisi bir vatandaşlık görevidir?", "Vergi vermek", "Eğitim hakkı", "Sağlık hakkı", "Barınma hakkı"],
+            ["Başkalarının haklarına saygı hangi değeri gerektirir?", "Hoşgörüyü", "Bencilliği", "Kayıtsızlığı", "Kavgayı"],
+            ["Hangisi bir sosyal gruba örnektir?", "Spor kulübü", "Ağaç", "Dağ", "Nehir"],
+            ["Toplumun en küçük yapı taşı nedir?", "Aile", "Okul", "Mahalle", "Belediye"],
+            ["Sınıf başkanı demokratik olarak nasıl seçilir?", "Oylama ile", "Atama ile", "Kurayla", "Yaşa göre"],
+            ["Etkili iletişim için ne gerekir?", "Karşımızdakini dinlemek", "Sözünü kesmek", "Bağırmak", "Aldırmamak"],
+            ["Belediye başkanını kimler seçer?", "Halk", "Vali", "Muhtar", "Öğretmen"],
+            ["Bir mahallenin yöneticisi kimdir?", "Muhtar", "Vali", "Belediye başkanı", "Kaymakam"],
+            ["Toplumdaki farklılıklara karşı nasıl davranmalıyız?", "Saygı göstermeliyiz", "Alay etmeliyiz", "Dışlamalıyız", "Önemsememeliyiz"],
+            ["Haklarını bilen, sorumluluklarını yerine getiren kişiye ne denir?", "Etkin vatandaş", "Turist", "Misafir", "Yönetici"]]);
+        EXT(5, "Sosyal Bilgiler", "Kültür ve Miras", [
+            ["Truva antik kenti hangi ilimizdedir?", "Çanakkale", "Antalya", "Konya", "Sivas"],
+            ["Efes antik kenti hangi ilimizdedir?", "İzmir", "Mersin", "Van", "Kars"],
+            ["Göbeklitepe hangi ilimizdedir?", "Şanlıurfa", "Mardin", "Hatay", "Muğla"],
+            ["Çatalhöyük hangi ilimizdedir?", "Konya", "Ankara", "Sivas", "Erzurum"],
+            ["Eski Mısır'da kullanılan yazı türü hangisidir?", "Hiyeroglif", "Çivi yazısı", "Latin harfleri", "Arap harfleri"],
+            ["Mezopotamya'da kullanılan yazı hangisidir?", "Çivi yazısı", "Hiyeroglif", "Latin harfleri", "Kiril harfleri"],
+            ["Yazıyı bulan uygarlık hangisidir?", "Sümerler", "Hititler", "Frigler", "Lidyalılar"],
+            ["Mısır'da firavunlar için yapılan anıt mezarlara ne denir?", "Piramit", "Sarnıç", "Kale", "Han"],
+            ["Hangisi kültürel mirasa örnektir?", "Tarihî camiler ve köprüler", "Yeni alışveriş merkezi", "Fabrika", "Otopark"],
+            ["Müzelerin görevi nedir?", "Tarihî eserleri korumak ve sergilemek", "Eser satmak", "Eserleri yok etmek", "Eğlence düzenlemek"],
+            ["Hangisi somut olmayan kültürel mirastır?", "Halk oyunları", "Köprü", "Saray", "Kale"],
+            ["Hangisi geleneksel el sanatlarımızdandır?", "Halı dokumacılığı", "Robot yapımı", "Yazılım", "Uzay mühendisliği"],
+            ["Frigler'in başkenti neresiydi?", "Gordion", "Sard", "Hattuşa", "Van"]]);
+        EXT(5, "Sosyal Bilgiler", "İnsanlar, Yerler ve Çevreler", [
+            ["Yön bulmak için hangi alet kullanılır?", "Pusula", "Termometre", "Terazi", "Barometre"],
+            ["Ana yön kaç tanedir?", "4", "2", "6", "8"],
+            ["Güneş hangi yönden doğar?", "Doğu", "Batı", "Kuzey", "Güney"],
+            ["Güneş hangi yönde batar?", "Batı", "Doğu", "Kuzey", "Güney"],
+            ["Hangisi bir yer şekli örneğidir?", "Dağ", "Okul", "Köprü", "Yol"],
+            ["Dünya'nın küçültülmüş modeline ne denir?", "Küre (Globus)", "Harita", "Plan", "Kroki"],
+            ["Bir yerin kuşbakışı çizimine ne denir?", "Harita", "Resim", "Karikatür", "Şema"],
+            ["Türkiye'nin üç tarafı neyle çevrilidir?", "Denizlerle", "Dağlarla", "Çöllerle", "Göllerle"],
+            ["Türkiye'nin en yüksek dağı hangisidir?", "Ağrı Dağı", "Erciyes", "Uludağ", "Kaçkar"],
+            ["Türkiye sınırları içinde tamamen yer alan en uzun akarsu hangisidir?", "Kızılırmak", "Fırat", "Dicle", "Aras"],
+            ["Türkiye'nin en büyük gölü hangisidir?", "Van Gölü", "Tuz Gölü", "Beyşehir Gölü", "Eğirdir Gölü"],
+            ["Türkiye'nin kuzeyinde hangi deniz bulunur?", "Karadeniz", "Akdeniz", "Ege Denizi", "Hazar Denizi"],
+            ["Hangisi bir doğal afettir?", "Deprem", "Alışveriş", "Bayram", "Konser"]]);
+
+        // --- 6. SINIF: Türkçe / Fen / Sosyal -> konu başına 15 soru ---
+        EXT(6, "Türkçe", "Sözcükte Anlam", [
+            ["‘Sıcak’ sözcüğünün zıt anlamlısı hangisidir?", "soğuk", "ılık", "kaynar", "yakıcı"],
+            ["‘Geniş’ sözcüğünün zıt anlamlısı hangisidir?", "dar", "büyük", "uzun", "yayvan"],
+            ["‘Ödev’ sözcüğünün eş anlamlısı hangisidir?", "görev", "oyun", "ders", "sınav"],
+            ["Hangi cümlede ‘yüz’ sözcüğü sayı anlamındadır?", "Sepette yüz elma vardı.", "Yüzünü yıkadı.", "Havuzda yüzmeyi sever.", "Kitabın yüzü sararmış."],
+            ["Hangi cümlede ‘dil’ sözcüğü vücut parçası anlamındadır?", "Dilini ısırdı.", "Türkçe güzel bir dildir.", "Dil öğrenmek zordur.", "Yabancı dil kursuna gitti."],
+            ["Hangi cümlede ‘el’ sözcüğü gerçek anlamda kullanılmıştır?", "Elini yaraladı.", "Eli açık biridir.", "Elinden iş gelmez.", "Eli ayağına dolaştı."],
+            ["Hangi cümlede ‘kara’ sözcüğü mecaz anlamdadır?", "Kara haber çabuk yayılır.", "Kara toprağı sürdü.", "Kara bulutlar toplandı.", "Karayolu kapandı."],
+            ["Hangisi bir deyimdir?", "Dili tutulmak", "Kırmızı elma", "Büyük ev", "Güzel hava"],
+            ["‘Eli açık’ deyimi ne anlama gelir?", "Cömert", "Cimri", "Tembel", "Çalışkan"],
+            ["‘Dört gözle beklemek’ deyimi ne anlama gelir?", "Sabırsızlıkla beklemek", "Dört kişiyle beklemek", "Gözlük takmak", "Uyumak"],
+            ["‘Damlaya damlaya göl olur.’ sözü hangi türdendir?", "Atasözü", "Deyim", "Terim", "Mecaz"],
+            ["Hangisi yansıma sözcüktür?", "hışır hışır", "masa", "koşmak", "mavi"],
+            ["‘Çay’ sözü hem içecek hem akarsu anlamı taşır. Bu sözcük hangi türdendir?", "Eş sesli", "Zıt anlamlı", "Eş anlamlı", "Yansıma"]]);
+        EXT(6, "Türkçe", "Fiiller", [
+            ["Hangisi bir fiildir?", "koşmak", "masa", "mavi", "güzel"],
+            ["‘Yarın okula gideceğim.’ cümlesinde fiil hangi zamandadır?", "Gelecek zaman", "Geçmiş zaman", "Geniş zaman", "Şimdiki zaman"],
+            ["‘Kitap okuyor.’ cümlesinde fiil hangi zamandadır?", "Şimdiki zaman", "Geçmiş zaman", "Gelecek zaman", "Geniş zaman"],
+            ["‘Her sabah erken kalkar.’ cümlesinde fiil hangi zamandadır?", "Geniş zaman", "Geçmiş zaman", "Gelecek zaman", "Şimdiki zaman"],
+            ["Hangi fiil olumsuzdur?", "gelmedi", "geldi", "geliyor", "gelecek"],
+            ["‘Geldik’ fiilinde kişi hangisidir?", "Biz", "Ben", "Sen", "O"],
+            ["Fiilleri olumsuz yapan ek hangisidir?", "-me / -ma", "-di", "-yor", "-ecek"],
+            ["‘Çocuk koştu.’ cümlesinin öznesi hangisidir?", "Çocuk", "koştu", "Çocuk koştu", "Yoktur"],
+            ["Hangi cümlenin yüklemi fiildir?", "Kuşlar uçuyor.", "Ev büyük.", "Bu bir elmadır.", "O öğretmendir."],
+            ["‘Yazıyorum’ fiilinin kökü hangisidir?", "yaz", "yazı", "yazıyor", "um"],
+            ["‘Gülmek’ fiilinin emir kipi (sen için) hangisidir?", "gül", "güler", "güldü", "gülecek"],
+            ["Hangi fiil geçmiş zaman değildir?", "okuyacak", "okudu", "yazdı", "geldi"],
+            ["Eylemin ne zaman yapıldığını gösteren özelliğe ne denir?", "Zaman", "Kişi", "Tamlama", "Mecaz"]]);
+        EXT(6, "Türkçe", "Noktalama İşaretleri", [
+            ["Soru işareti hangi cümlenin sonuna konur?", "Soru bildiren", "Haber bildiren", "Seslenme", "Emir"],
+            ["Hangi cümlenin sonuna ünlem işareti konur?", "Hey, dikkat et", "Okula gittim", "Nerede oturuyorsun", "Bugün çarşamba"],
+            ["Kesme işareti özel adlara gelen neyi ayırır?", "Ekleri", "Sözcükleri", "Cümleleri", "Sayıları"],
+            ["Tarihte gün, ay ve yıl arasında hangi işaret kullanılabilir?", "Nokta", "Virgül", "Soru işareti", "İki nokta"],
+            ["Parantez ne için kullanılır?", "Açıklama için", "Soru için", "Ünlem için", "Sıralama için"],
+            ["Seslenme sözcüklerinden sonra hangi işaret gelir?", "Virgül", "Nokta", "İki nokta", "Soru işareti"],
+            ["Kısaltmalardan sonra hangi işaret kullanılabilir?", "Nokta", "Virgül", "Ünlem", "İki nokta"],
+            ["Açıklama yapılacak cümlenin sonunda hangi işaret kullanılır?", "İki nokta", "Nokta", "Virgül", "Ünlem"],
+            ["Noktalı virgül (;) ne için kullanılır?", "Birbirine bağlı cümleleri ayırmak için", "Soru için", "Cümle sonu için", "Ünlem için"],
+            ["Üç nokta (...) ne için kullanılır?", "Söylenmeyen sözlerin yerine", "Soru için", "Sıralama için", "Alıntı için"],
+            ["‘Ne güzel bir gün’ cümlesinin sonuna ne konur?", "Ünlem", "Soru işareti", "İki nokta", "Virgül"],
+            ["‘Saat kaçta geleceksin’ cümlesinin sonuna ne konur?", "Soru işareti", "Ünlem", "Nokta", "İki nokta"],
+            ["Satır sonuna sığmayan sözcük bölünürken hangi işaret kullanılır?", "Kısa çizgi", "Nokta", "Virgül", "Ünlem"]]);
+        EXT(6, "Fen Bilimleri", "Güneş Sistemi ve Tutulmalar", [
+            ["Güneş Sistemi'nde kaç gezegen vardır?", "8", "7", "9", "10"],
+            ["Güneş Sistemi'nin en büyük gezegeni hangisidir?", "Jüpiter", "Dünya", "Mars", "Satürn"],
+            ["Halkalarıyla tanınan gezegen hangisidir?", "Satürn", "Mars", "Venüs", "Merkür"],
+            ["Kızıl Gezegen hangisidir?", "Mars", "Venüs", "Jüpiter", "Merkür"],
+            ["Dünya, Güneş'e yakınlık bakımından kaçıncı gezegendir?", "3.", "2.", "4.", "5."],
+            ["Ay tutulması hangi Ay evresinde olur?", "Dolunay", "Yeni ay", "İlk dördün", "Son dördün"],
+            ["Güneş tutulması hangi Ay evresinde olur?", "Yeni ay", "Dolunay", "İlk dördün", "Son dördün"],
+            ["Ay'ın evreleri yaklaşık kaç günde tekrarlanır?", "29,5 gün", "7 gün", "1 yıl", "24 saat"],
+            ["Ay yüzeyindeki çukurlara ne denir?", "Kraterler", "Vadiler", "Nehirler", "Göller"],
+            ["Aşağıdakilerden hangisi kendi ışığını yayar?", "Yıldızlar", "Gezegenler", "Uydular", "Göktaşları"],
+            ["Gök cisimlerini incelemek için hangi alet kullanılır?", "Teleskop", "Mikroskop", "Pusula", "Termometre"],
+            ["Güneş tutulmasında Ay'ın gölgesi nereye düşer?", "Dünya'ya", "Güneş'e", "Mars'a", "Ay'a"],
+            ["Güneş, Dünya'daki yaşam için neden önemlidir?", "Işık ve ısı kaynağıdır", "Sadece ses verir", "Rüzgâr üretir", "Gelgit yapar"]]);
+        EXT(6, "Fen Bilimleri", "Vücudumuzdaki Sistemler", [
+            ["Yemek borusundan geçen besinler hangi organa gider?", "Mide", "Akciğer", "Kalp", "Böbrek"],
+            ["Gaz alışverişi hangi organda gerçekleşir?", "Akciğer", "Mide", "Kalp", "Karaciğer"],
+            ["Kan dolaşımının merkezi hangi organdır?", "Kalp", "Beyin", "Mide", "Akciğer"],
+            ["Sindirilmemiş atıkların dışarı atılmasına yardımcı bölüm hangisidir?", "Kalın bağırsak", "Mide", "Yemek borusu", "Karaciğer"],
+            ["Kanı süzerek temizleyen organ hangisidir?", "Böbrek", "Mide", "Kemik", "Akciğer"],
+            ["Solunumda vücudumuza alınan gaz hangisidir?", "Oksijen", "Karbondioksit", "Azot", "Hidrojen"],
+            ["Solunumda vücuttan dışarı verilen gaz hangisidir?", "Karbondioksit", "Oksijen", "Helyum", "Hidrojen"],
+            ["Vücuda şekil verip organları koruyan sistem hangisidir?", "Destek ve hareket sistemi", "Sindirim sistemi", "Boşaltım sistemi", "Solunum sistemi"],
+            ["Kemiklerin birleştiği yerlere ne denir?", "Eklem", "Kas", "Damar", "Sinir"],
+            ["Sinir sisteminin merkezi hangisidir?", "Beyin", "Kalp", "Mide", "Böbrek"],
+            ["Kalpten vücuda kan taşıyan damarlara ne denir?", "Atardamar", "Toplardamar", "Kılcal damar", "Sinir"],
+            ["Dişlerimiz hangi sistemin parçasıdır?", "Sindirim sistemi", "Solunum sistemi", "Dolaşım sistemi", "Boşaltım sistemi"],
+            ["Sağlıklı beslenmek için ne yapmalıyız?", "Dengeli ve çeşitli beslenmeliyiz", "Sadece tatlı yemeliyiz", "Sadece et yemeliyiz", "Öğün atlamalıyız"]]);
+        EXT(6, "Fen Bilimleri", "Kuvvet ve Hareket", [
+            ["Hız birimi hangisidir?", "km/sa", "kg", "N", "L"],
+            ["Sabit hızla giden araç 3 saatte 180 km yol alırsa hızı kaç km/sa'tir?", "60", "540", "183", "30"],
+            ["80 km/sa hızla giden araç 2 saatte kaç km yol alır?", "160 km", "40 km", "82 km", "78 km"],
+            ["Zamanla konum değiştiren cisim ne yapıyordur?", "Hareket", "Durgunluk", "Erime", "Donma"],
+            ["Dengelenmiş kuvvetlerin etkisindeki cisim ne yapar?", "Durumunu korur", "Hızlanır", "Yavaşlar", "Yok olur"],
+            ["Bir cismin hızlanması için hangisi gerekir?", "Dengelenmemiş kuvvet", "Dengelenmiş kuvvet", "Sürtünmesizlik", "Kütle sıfırlığı"],
+            ["Dünya'nın cisimleri kendine çekmesine ne denir?", "Yer çekimi", "Sürtünme", "Manyetik kuvvet", "Elastik kuvvet"],
+            ["Aynı yönlü iki kuvvetin bileşkesi nasıl bulunur?", "Toplanır", "Çıkarılır", "Çarpılır", "Bölünür"],
+            ["Zıt yönlü iki kuvvetin bileşkesi nasıl bulunur?", "Büyükten küçük çıkarılır", "Toplanır", "Çarpılır", "Sıfırdır"],
+            ["100 m'yi 20 saniyede koşan çocuğun hızı kaç m/s'dir?", "5", "20", "2000", "0,2"],
+            ["90 km yolu 1,5 saatte alan araç kaç km/sa hızla gitmiştir?", "60", "135", "91,5", "45"],
+            ["Sürtünme olmasaydı ne olurdu?", "Hareket eden cisimler duramazdı", "Cisimler daha hızlı dururdu", "Her şey ısınırdı", "Ses artardı"],
+            ["Hareketi başlatan ya da durduran etkiye ne denir?", "Kuvvet", "Hız", "Zaman", "Kütle"]]);
+        EXT(6, "Sosyal Bilgiler", "Kültür ve Miras", [
+            ["Göktürk Devleti'nin kurucusu kimdir?", "Bumin Kağan", "Mete Han", "Atilla", "Alparslan"],
+            ["Orhun Yazıtları'nı kimler için yazdırmıştır?", "Bilge Kağan ve Kül Tigin", "Mete Han", "Alparslan", "Atatürk"],
+            ["Büyük Hun Devleti'nin ünlü hükümdarı kimdir?", "Mete Han", "Bilge Kağan", "Alparslan", "Melikşah"],
+            ["Müslüman olan ilk Türk devleti hangisidir?", "Karahanlılar", "Hunlar", "Göktürkler", "Uygurlar"],
+            ["Orta Asya'da yerleşik hayata geçen ilk Türk devleti hangisidir?", "Uygurlar", "Hunlar", "Göktürkler", "Karahanlılar"],
+            ["Orta Asya Türklerinin temel geçim kaynağı nedir?", "Hayvancılık", "Balıkçılık", "Madencilik", "Bankacılık"],
+            ["Eski Türklerin kullandığı çadır tipi ev nedir?", "Yurt", "Apartman", "Köşk", "Saray"],
+            ["Türklerde töre ne demektir?", "Yazılı olmayan toplum kuralları", "Yazı türü", "Mevsim", "Silah"],
+            ["İpek Yolu hangi alanda önemliydi?", "Ticaret", "Tarım", "Spor", "Eğitim"],
+            ["Orhun Yazıtları hangi ülkede bulunmaktadır?", "Moğolistan", "Türkiye", "Çin", "Rusya"],
+            ["Kültür nedir?", "Bir toplumun yaşam biçimi, gelenek ve değerleri", "Para", "Yemek", "Silah"],
+            ["Türk kültüründe misafirperverlik hangi değerle ilişkilidir?", "Cömertlik", "Cimrilik", "Kibir", "Bencillik"],
+            ["Hangisi Orta Asya Türk devletlerinden biri değildir?", "Osmanlı Devleti", "Büyük Hun Devleti", "Göktürk Devleti", "Uygur Devleti"]]);
+        EXT(6, "Sosyal Bilgiler", "İnsanlar, Yerler ve Çevreler", [
+            ["Dünya'yı kuzey ve güney yarım küreye ayıran çizgi hangisidir?", "Ekvator", "Başlangıç meridyeni", "Dönenceler", "Kutup noktası"],
+            ["Doğu-batı yönünde Dünya'yı saran çizgilere ne denir?", "Paraleller", "Meridyenler", "Kutuplar", "Dönenceler"],
+            ["Kutuptan kutba uzanan çizgilere ne denir?", "Meridyenler", "Paraleller", "Ekvator", "Ölçek"],
+            ["Türkiye hangi yarım kürededir?", "Kuzey Yarım Küre", "Güney Yarım Küre", "Ekvator'dadır", "Kutuptadır"],
+            ["Türkiye hangi iki kıtada yer alır?", "Asya ve Avrupa", "Asya ve Afrika", "Avrupa ve Afrika", "Asya ve Amerika"],
+            ["Haritadaki işaretlerin anlamını gösteren bölüme ne denir?", "Harita anahtarı", "Ölçek", "Pusula", "Başlık"],
+            ["Dağlara göre daha alçak ve düz yerlere ne denir?", "Ova", "Dağ", "Plato", "Vadi"],
+            ["Akarsuların aşındırarak oluşturduğu derin oluklara ne denir?", "Vadi", "Ova", "Dağ", "Plato"],
+            ["Türkiye kaç coğrafi bölgeye ayrılır?", "7", "5", "8", "9"],
+            ["Hangisi Türkiye'nin coğrafi bölgelerinden biridir?", "Marmara", "Pasifik", "Orta Asya", "Balkan"],
+            ["İklim nedir?", "Bir yerde uzun yıllar boyunca görülen hava olaylarının ortalaması", "Bugünkü hava durumu", "Yarınki hava durumu", "Rüzgâr"],
+            ["Hava olaylarını inceleyen bilim dalı hangisidir?", "Meteoroloji", "Jeoloji", "Biyoloji", "Tarih"],
+            ["Dünya'nın en büyük kıtası hangisidir?", "Asya", "Afrika", "Avrupa", "Okyanusya"]]);
+        EXT(6, "Sosyal Bilgiler", "Etkin Vatandaşlık", [
+            ["Türkiye'de yasaları yapan kurum hangisidir?", "TBMM", "Danıştay", "Belediye", "Valilik"],
+            ["Yasaları uygulayan güce ne denir?", "Yürütme", "Yasama", "Yargı", "Basın"],
+            ["Mahkemeler hangi güce aittir?", "Yargı", "Yasama", "Yürütme", "Medya"],
+            ["TBMM kaç milletvekilinden oluşur?", "600", "450", "550", "360"],
+            ["Türkiye'nin yönetim biçimi nedir?", "Cumhuriyet", "Krallık", "Sultanlık", "Hanlık"],
+            ["Anayasa nedir?", "Devletin temel kurallarını belirleyen en üst yasa", "Ders kitabı", "Spor kuralı", "Okul yönetmeliği"],
+            ["Herkesin yasalar önünde aynı olması hangi ilkedir?", "Eşitlik", "Ayrıcalık", "Zorunluluk", "Yasaklama"],
+            ["Oy kullanmak hangi tür haktır?", "Siyasi hak", "Sosyal hak", "Ekonomik hak", "Kültürel hak"],
+            ["Muhtar kimler tarafından seçilir?", "Mahalle halkı", "Vali", "Cumhurbaşkanı", "Belediye başkanı"],
+            ["Okulda öğrenci meclisi neyi sağlar?", "Öğrencilerin okul yönetimine katılımını", "Sınıf geçmeyi", "Tatil günlerini", "Ders programını"],
+            ["Sivil toplum kuruluşları ne yapar?", "Gönüllü olarak toplumsal sorunlara çözüm arar", "Vergi toplar", "Yasa yapar", "Mahkeme kurar"],
+            ["Hangisi ulusal bayramlarımızdan biridir?", "23 Nisan Ulusal Egemenlik ve Çocuk Bayramı", "Yılbaşı", "Cadılar Bayramı", "Sevgililer Günü"],
+            ["TBMM hangi yıl açılmıştır?", "1920", "1923", "1919", "1938"]]);
+
+        // --- 7. SINIF: Türkçe / Fen / Sosyal -> konu başına 15 soru ---
+        EXT(7, "Türkçe", "Deyimler ve Atasözleri", [
+            ["‘Gözden düşmek’ deyimi ne anlama gelir?", "Değerini kaybetmek", "Gözüne bir şey kaçmak", "Çok sevmek", "Yere düşmek"],
+            ["‘Burun kıvırmak’ deyimi ne anlama gelir?", "Beğenmemek", "Koklamak", "Sevinmek", "Hapşırmak"],
+            ["‘Ayağını yorgana göre uzat.’ atasözü neyi öğütler?", "Gelire göre harcama yapmayı", "Çok harcamayı", "Yorgan almayı", "Spor yapmayı"],
+            ["‘Sakla samanı, gelir zamanı.’ atasözü neyi anlatır?", "Her şeyin bir gün işe yarayabileceğini", "Saman satmayı", "Tembelliği", "Hayvan beslemeyi"],
+            ["‘Üzüm üzüme baka baka kararır.’ atasözü neyi anlatır?", "İnsanların çevresinden etkilendiğini", "Üzümün kararmasını", "Bağcılığı", "Yaz mevsimini"],
+            ["‘Bir elin nesi var, iki elin sesi var.’ atasözü neyi vurgular?", "Birlik ve dayanışmayı", "Alkışı", "Müziği", "Gürültüyü"],
+            ["‘Kulak vermek’ deyimi ne anlama gelir?", "Dinlemek", "Kulak kesmek", "Duymamak", "Konuşmak"],
+            ["‘Yüreği ağzına gelmek’ deyimi ne anlama gelir?", "Çok korkmak", "Çok yemek", "Çok sevinmek", "Hastalanmak"],
+            ["‘Çam devirmek’ deyimi ne anlama gelir?", "Yersiz söz söylemek", "Ağaç kesmek", "Orman yapmak", "Çok çalışmak"],
+            ["‘Acele işe şeytan karışır.’ atasözü neyi öğütler?", "İşleri aceleyle yapmamayı", "Hızlı olmayı", "Şeytandan korkmayı", "Erken yatmayı"],
+            ["‘Bugünün işini yarına bırakma.’ atasözü neyi öğütler?", "Zamanı iyi kullanmayı", "Tembel olmayı", "Yarını beklemeyi", "Çok uyumayı"],
+            ["Deyim ile atasözü arasındaki fark nedir?", "Atasözü öğüt verir, deyim kalıplaşmış anlatımdır", "İkisi aynıdır", "Deyim öğüt verir", "Atasözü tek sözcüktür"],
+            ["‘Dost acı söyler.’ atasözü ne anlatır?", "Gerçek dostun doğruyu söylediğini", "Dostun kızdığını", "Acı yemek yemeyi", "Dostun yalan söylediğini"]]);
+        EXT(7, "Türkçe", "Fiilimsiler", [
+            ["‘Okumak’ sözcüğündeki -mak eki hangi fiilimsiyi yapar?", "İsim-fiil", "Sıfat-fiil", "Zarf-fiil", "Ek fiil"],
+            ["‘Koşan çocuk yoruldu.’ cümlesindeki fiilimsi hangisidir?", "koşan", "çocuk", "yoruldu", "Koşan çocuk"],
+            ["‘Gelerek’ sözcüğü hangi fiilimsi türündedir?", "Zarf-fiil", "İsim-fiil", "Sıfat-fiil", "Ek fiil"],
+            ["‘Uyuyan çocuğu uyandırma.’ cümlesindeki sıfat-fiil hangisidir?", "uyuyan", "çocuğu", "uyandırma", "Uyuyan çocuğu"],
+            ["‘Ağlayarak eve geldi.’ cümlesinde fiilimsi neyi bildirir?", "Eylemin nasıl yapıldığını", "Adı niteler", "Ad gibi kullanılır", "Yüklem olur"],
+            ["‘Beklenen misafirler geldi.’ cümlesindeki fiilimsi hangisidir?", "beklenen", "misafirler", "geldi", "Beklenen misafirler"],
+            ["‘Koşmak sağlığa yararlıdır.’ cümlesindeki ‘koşmak’ hangi fiilimsidir?", "İsim-fiil", "Sıfat-fiil", "Zarf-fiil", "Yüklem"],
+            ["Sıfat-fiiller hangi görevi üstlenir?", "Adı niteler", "Fiili niteler", "Ad gibi kullanılır", "Bağlaç görevi görür"],
+            ["Zarf-fiiller ne işe yarar?", "Eylemin nasıl ya da ne zaman yapıldığını bildirir", "Adı niteler", "Ad yerine geçer", "Soru sorar"],
+            ["‘Eve gelince seni arayacağım.’ cümlesindeki fiilimsi hangisidir?", "gelince", "arayacağım", "Eve", "seni"],
+            ["Fiilimsiler cümlede yüklem olabilir mi?", "Hayır, yüklem olamazlar", "Evet, her zaman", "Sadece isim-fiil olur", "Sadece sıfat-fiil olur"],
+            ["‘Okuma alışkanlığı kazanmak önemlidir.’ cümlesindeki ‘okuma’ hangi fiilimsidir?", "İsim-fiil", "Sıfat-fiil", "Zarf-fiil", "Ek fiil"],
+            ["‘Gülümseyerek selam verdi.’ cümlesinde kaç fiilimsi vardır?", "1", "2", "3", "0"]]);
+        EXT(7, "Türkçe", "Cümlenin Ögeleri", [
+            ["Cümlede iş, oluş ve durum bildiren öge hangisidir?", "Yüklem", "Özne", "Nesne", "Zarf tümleci"],
+            ["Eylemi yapanı bildiren ögeye ne denir?", "Özne", "Nesne", "Yüklem", "Tümleç"],
+            ["‘Ali kitabı okudu.’ cümlesinde nesne hangisidir?", "kitabı", "Ali", "okudu", "Ali kitabı"],
+            ["‘Kedi hızla koştu.’ cümlesinde zarf tümleci hangisidir?", "hızla", "Kedi", "koştu", "Kedi hızla"],
+            ["‘Annem pazardan elma aldı.’ cümlesinde dolaylı tümleç hangisidir?", "pazardan", "Annem", "elma", "aldı"],
+            ["‘Ahmet dün akşam geldi.’ cümlesinde zaman bildiren öge hangisidir?", "dün akşam", "Ahmet", "geldi", "akşam geldi"],
+            ["Yüklemi fiil olan cümleye ne denir?", "Fiil cümlesi", "İsim cümlesi", "Olumsuz cümle", "Soru cümlesi"],
+            ["Kurallı bir cümlede yüklem nerede bulunur?", "En sonda", "Başta", "Ortada", "Özneden önce"],
+            ["Yüklemi sonda olmayan cümleye ne denir?", "Devrik cümle", "Kurallı cümle", "İsim cümlesi", "Olumlu cümle"],
+            ["‘Geldi arkadaşım okuldan.’ cümlesi yapısı bakımından nedir?", "Devrik", "Kurallı", "Olumsuz", "Soru"],
+            ["‘Öğretmen soruyu tahtaya yazdı.’ cümlesinin yüklemi hangisidir?", "yazdı", "Öğretmen", "soruyu", "tahtaya"],
+            ["‘Ödevimi yaptım.’ cümlesinin gizli öznesi kimdir?", "Ben", "Sen", "O", "Biz"],
+            ["Cümlede ‘Neyi?’ ‘Kimi?’ sorularına cevap veren ögeye ne denir?", "Belirtili nesne", "Özne", "Yüklem", "Zarf tümleci"]]);
+        EXT(7, "Fen Bilimleri", "Güneş Sistemi ve Ötesi", [
+            ["Milyarlarca yıldızın bulunduğu dev yıldız topluluğuna ne denir?", "Galaksi", "Takımyıldız", "Uydu", "Gezegen"],
+            ["Dünya'nın içinde bulunduğu galaksinin adı nedir?", "Samanyolu", "Andromeda", "Güneş", "Ay"],
+            ["Gökyüzünde yıldızların oluşturduğu hayalî şekillere ne denir?", "Takımyıldız", "Galaksi", "Yörünge", "Gezegen"],
+            ["Kuzey yönünü bulmada hangi yıldızdan yararlanılır?", "Kutup Yıldızı", "Güneş", "Sirius", "Merkür"],
+            ["Gök cisimlerini incelemek için kurulan yapıya ne denir?", "Rasathane", "Müze", "Kütüphane", "Hastane"],
+            ["Yapay uydular ne için kullanılır?", "Haberleşme ve hava durumu takibi", "Yağmur yağdırmak", "Gelgit oluşturmak", "Mevsimleri değiştirmek"],
+            ["Güneş'ten sonra Dünya'ya en yakın yıldız hangisidir?", "Proxima Centauri", "Sirius", "Vega", "Kutup Yıldızı"],
+            ["Ay'a ilk insan hangi yıl ayak basmıştır?", "1969", "1957", "1981", "2001"],
+            ["İlk yapay uydu hangisidir?", "Sputnik", "Apollo", "Voyager", "Hubble"],
+            ["Uzayda Dünya yörüngesinde çalışan ünlü teleskop hangisidir?", "Hubble", "Sputnik", "Apollo 11", "Voyager"],
+            ["Gezegenler Güneş etrafında nasıl bir yol izler?", "Elips şeklinde yörünge", "Düz çizgi", "Kare", "Zikzak"],
+            ["Atmosferde yanarak ışık izi bırakan gök cismine ne denir?", "Meteor", "Uydu", "Gezegen", "Galaksi"],
+            ["Uzay araştırmalarının bir faydası nedir?", "Yeni teknolojilerin gelişmesi", "Mevsimlerin değişmesi", "Gelgit oluşması", "Depremlerin artması"]]);
+        EXT(7, "Fen Bilimleri", "Hücre ve Bölünmeler", [
+            ["Canlıların yapı ve görev birimi nedir?", "Hücre", "Doku", "Organ", "Sistem"],
+            ["Hücrede enerji üreten organel hangisidir?", "Mitokondri", "Çekirdek", "Koful", "Ribozom"],
+            ["Bitki hücresinde olup hayvan hücresinde bulunmayan yapı hangisidir?", "Hücre duvarı", "Çekirdek", "Hücre zarı", "Sitoplazma"],
+            ["Fotosentez hangi organelde yapılır?", "Kloroplast", "Mitokondri", "Ribozom", "Çekirdek"],
+            ["Hücreye madde giriş çıkışını kontrol eden yapı hangisidir?", "Hücre zarı", "Çekirdek", "Koful", "Kloroplast"],
+            ["Protein üretiminde görevli organel hangisidir?", "Ribozom", "Mitokondri", "Koful", "Çekirdek"],
+            ["Mitoz bölünme sonucunda kaç hücre oluşur?", "2", "4", "1", "8"],
+            ["Mayoz bölünme sonucunda kaç hücre oluşur?", "4", "2", "1", "8"],
+            ["Mitoz bölünme ne işe yarar?", "Büyüme ve onarım", "Eşey hücresi oluşturma", "Ses üretme", "Kemik yok etme"],
+            ["Benzer hücrelerin bir araya gelmesiyle ne oluşur?", "Doku", "Organ", "Sistem", "Organel"],
+            ["Hücre, doku, organ sıralamasında organdan sonra ne gelir?", "Sistem", "Doku", "Hücre", "Organel"],
+            ["Mikroskop ne işe yarar?", "Gözle görülemeyen küçük yapıları büyütür", "Uzak yıldızları gösterir", "Sıcaklık ölçer", "Kütle ölçer"],
+            ["Hücreyi ilk gözlemleyen bilim insanı kimdir?", "Robert Hooke", "Newton", "Einstein", "Pasteur"]]);
+        EXT(7, "Fen Bilimleri", "Saf Madde ve Karışımlar", [
+            ["Aynı cins atomlardan oluşan saf maddeye ne denir?", "Element", "Bileşik", "Karışım", "Çözelti"],
+            ["Farklı cins atomların birleşmesiyle oluşan saf maddeye ne denir?", "Bileşik", "Element", "Karışım", "Alaşım"],
+            ["Su hangi tür maddedir?", "Bileşik", "Element", "Karışım", "Alaşım"],
+            ["Tuzlu su hangi tür karışımdır?", "Homojen karışım", "Heterojen karışım", "Element", "Bileşik"],
+            ["Zeytinyağı–su karışımı hangi tür karışımdır?", "Heterojen karışım", "Homojen karışım", "Bileşik", "Element"],
+            ["Tuzlu sudan tuzu ayırmak için hangi yöntem kullanılır?", "Buharlaştırma", "Mıknatıs", "Eleme", "Ayıklama"],
+            ["Demir tozu–kum karışımı hangi yöntemle ayrılır?", "Mıknatısla", "Süzme", "Buharlaştırma", "Damıtma"],
+            ["Kum–su karışımı hangi yöntemle ayrılır?", "Süzme", "Mıknatısla ayırma", "Yoğuşturma", "Ayıklama"],
+            ["Kaynama noktası farklı iki sıvıyı ayırmak için hangi yöntem kullanılır?", "Damıtma", "Süzme", "Eleme", "Ayıklama"],
+            ["Sembolü Fe olan element hangisidir?", "Demir", "Flor", "Fosfor", "Fransiyum"],
+            ["Sembolü O olan element hangisidir?", "Oksijen", "Osmiyum", "Altın", "Karbon"],
+            ["Su formülündeki (H₂O) H hangi elementtir?", "Hidrojen", "Helyum", "Civa", "Demir"],
+            ["Alaşım nedir?", "Bir metalin başka madde veya metallerle oluşturduğu karışım", "Gazların karışımı", "Sıvıların karışımı", "Tuzun suda çözünmesi"]]);
+        EXT(7, "Sosyal Bilgiler", "Ülkemizde Nüfus", [
+            ["Nüfus sayımı ne için yapılır?", "Ülkedeki insan sayısını ve özelliklerini belirlemek", "Vergi toplamak", "Maç yapmak", "Yol çizmek"],
+            ["Nüfus piramidi neyi gösterir?", "Nüfusun yaş ve cinsiyet dağılımını", "Yağış miktarını", "Sıcaklığı", "Yükseltiyi"],
+            ["Hangisi nüfusun dağılışını etkileyen doğal faktördür?", "İklim", "Sanayi", "Ulaşım", "Eğitim"],
+            ["Hangisi nüfus dağılışını etkileyen beşeri faktördür?", "Sanayi", "İklim", "Yer şekilleri", "Bitki örtüsü"],
+            ["Köyden şehre göç sonucunda ne olur?", "Şehir nüfusu artar", "Köy nüfusu artar", "Nüfus kalmaz", "Şehirler küçülür"],
+            ["İç göç nedir?", "Ülke içinde yapılan göç", "Ülkeler arası göç", "Turizm", "Geçici ziyaret"],
+            ["Dış göç nedir?", "Ülkeler arasında yapılan göç", "Köyden şehre taşınma", "Mahalle değiştirme", "Okul değiştirme"],
+            ["Türkiye'de nüfusu en fazla olan şehir hangisidir?", "İstanbul", "Ankara", "İzmir", "Bursa"],
+            ["Hangisi bir kırsal yerleşme türüdür?", "Köy", "Metropol", "Şehir", "Site"],
+            ["Türkiye'de nüfus sayımını yapan kurum hangisidir?", "TÜİK", "TBMM", "MEB", "Belediye"],
+            ["Nüfusun az olduğu yerler genellikle nasıldır?", "Dağlık ve ulaşımı zor", "Ovalık", "Kıyı kesimi", "Sanayi bölgesi"],
+            ["Nüfusun yoğun olduğu yerler genellikle nerelerdir?", "Ovalar ve kıyılar", "Dağ zirveleri", "Çöller", "Buzullar"],
+            ["Genç nüfus oranının yüksek olması neyi sağlar?", "Çalışan nüfus potansiyelini", "Hastalıkları", "Göçü", "İklim değişikliğini"]]);
+        EXT(7, "Sosyal Bilgiler", "Ekonomi ve Sosyal Hayat", [
+            ["İnsan ihtiyaçlarının sınırsız, kaynakların sınırlı olması neyi ifade eder?", "Kaynakların kıt olduğunu", "Bolluğu", "Tasarrufu", "Üretimi"],
+            ["Üretilen mal ve hizmeti satın alan kişiye ne denir?", "Tüketici", "Üretici", "Satıcı", "Mühendis"],
+            ["Tarım, hayvancılık ve ormancılık hangi sektördedir?", "Birincil sektör", "Sanayi sektörü", "Hizmet sektörü", "Teknoloji sektörü"],
+            ["Fabrikalarda ürün üretmek hangi sektöre girer?", "Sanayi", "Tarım", "Hizmet", "Balıkçılık"],
+            ["Ulaşım, eğitim ve sağlık hangi sektördedir?", "Hizmet sektörü", "Tarım", "Sanayi", "Madencilik"],
+            ["Hangisi bilinçli tüketici davranışıdır?", "İhtiyacı kadar alışveriş yapmak", "Her indirimde almak", "Fişsiz alışveriş yapmak", "Son kullanma tarihine bakmamak"],
+            ["Bütçe nedir?", "Gelir ve giderlerin planlanması", "Borç", "Vergi", "Faiz"],
+            ["Vergiler ne için toplanır?", "Kamu hizmetlerinin finansmanı için", "Kişilere hediye için", "Eğlence için", "Spor için"],
+            ["Reklamların temel amacı nedir?", "Ürünü tanıtıp satışı artırmak", "Eğitim vermek", "Vergi toplamak", "Yasak koymak"],
+            ["İhracat nedir?", "Yurt dışına mal satmak", "Yurt dışından mal almak", "Vergi vermek", "Borçlanmak"],
+            ["İthalat nedir?", "Yurt dışından mal almak", "Yurt dışına mal satmak", "Üretim yapmak", "Depolamak"],
+            ["Türkiye'nin para birimi nedir?", "Türk lirası", "Dolar", "Euro", "Sterlin"],
+            ["Tasarruf yapmanın faydası nedir?", "Geleceğe yatırım yapmak", "Savurganlık", "Borçlanmak", "İsraf"]]);
+        EXT(7, "Sosyal Bilgiler", "Türk Tarihi", [
+            ["Anadolu Selçuklu Devleti'nin kurucusu kimdir?", "Kutalmışoğlu Süleymanşah", "Alparslan", "Osman Bey", "Fatih Sultan Mehmet"],
+            ["Anadolu Selçuklu Devleti'nin en uzun süre başkenti neresidir?", "Konya", "İznik", "Bursa", "Ankara"],
+            ["Miryokefalon Savaşı'nı (1176) kazanan Selçuklu sultanı kimdir?", "II. Kılıç Arslan", "Alparslan", "Melikşah", "Tuğrul Bey"],
+            ["Osmanlı Devleti'nin kurucusu kimdir?", "Osman Bey", "Orhan Bey", "Fatih Sultan Mehmet", "Yavuz Sultan Selim"],
+            ["Osmanlı Devleti hangi yıl kurulmuştur?", "1299", "1071", "1453", "1517"],
+            ["İstanbul hangi yıl fethedilmiştir?", "1453", "1299", "1071", "1517"],
+            ["İstanbul'u fetheden padişah kimdir?", "II. Mehmet (Fatih)", "Yavuz Sultan Selim", "Kanuni Sultan Süleyman", "Orhan Bey"],
+            ["Osmanlı'nın İstanbul'dan önceki son başkenti neresidir?", "Edirne", "Bursa", "Konya", "İznik"],
+            ["Selçuklularda kervansaray ne işe yarar?", "Yolcuların ve tüccarların konakladığı yapıdır", "Mezarlıktır", "Kaledir", "Okuldur"],
+            ["Medrese nedir?", "Eğitim kurumu", "Hastane", "Han", "Hamam"],
+            ["Tuğrul Bey hangi devletin kurucusudur?", "Büyük Selçuklu Devleti", "Anadolu Selçuklu Devleti", "Osmanlı Devleti", "Karahanlılar"],
+            ["Dandanakan Savaşı (1040) sonucunda ne olmuştur?", "Büyük Selçuklu Devleti kurulmuştur", "Osmanlı kurulmuştur", "Malazgirt kazanılmıştır", "Bizans yıkılmıştır"],
+            ["Nizamülmülk'ün kurdurduğu eğitim kurumları hangileridir?", "Nizamiye Medreseleri", "Enderun", "Darüşşifa", "Han"]]);
+
+        // --- 8. SINIF: Türkçe / Fen / İnkılap Tarihi -> konu başına 15 soru ---
+        EXT(8, "Türkçe", "Fiilimsiler", [
+            ["‘Gelecek yıl okulu bitireceğim.’ cümlesindeki ‘gelecek’ hangi fiilimsidir?", "Sıfat-fiil", "İsim-fiil", "Zarf-fiil", "Ek fiil"],
+            ["‘Okuyunca anladım.’ cümlesindeki fiilimsi hangisidir?", "okuyunca", "anladım", "Okuyunca anladım", "Yoktur"],
+            ["Hangi cümlede isim-fiil vardır?", "Yüzmek güzel bir spordur.", "Yüzerek karşıya geçti.", "Yüzen çocuk yoruldu.", "Dün havuzda yüzdü."],
+            ["Hangi cümlede sıfat-fiil vardır?", "Yağan yağmur ekinleri suladı.", "Yağmur dün yağdı.", "Yağınca dışarı çıktık.", "Yağarak ıslattı."],
+            ["Hangi cümlede zarf-fiil vardır?", "Gülümseyerek içeri girdi.", "Gülmek iyidir.", "Gülen çocuk geldi.", "Güldü."],
+            ["‘-ken’ eki hangi fiilimsiyi yapar?", "Zarf-fiil", "İsim-fiil", "Sıfat-fiil", "Ek fiil"],
+            ["‘Yürüyüş’ sözcüğündeki ‘-iş’ eki hangi fiilimsiyi yapar?", "İsim-fiil", "Sıfat-fiil", "Zarf-fiil", "Ek fiil"],
+            ["‘Geçmiş günler geri gelmez.’ cümlesindeki ‘geçmiş’ hangi fiilimsidir?", "Sıfat-fiil", "İsim-fiil", "Zarf-fiil", "Yüklem"],
+            ["Fiilimsiyi fiilden ayıran temel özellik nedir?", "Kişi ve kip eki almadan ad, sıfat ya da zarf görevi görmesi", "Cümleyi bitirmesi", "Her zaman yüklem olması", "Yalnızca olumlu olması"],
+            ["‘Yorulunca dinlenir.’ cümlesinde kaç fiilimsi vardır?", "1", "2", "0", "3"],
+            ["‘Bakarak öğrenir.’ cümlesindeki fiilimsi hangisidir?", "bakarak", "öğrenir", "Bakarak öğrenir", "Yoktur"],
+            ["‘Yazılacak mektup hazır.’ cümlesindeki fiilimsi hangisidir?", "yazılacak", "mektup", "hazır", "Yazılacak mektup"],
+            ["‘Bilmek ve anlamak önemlidir.’ cümlesinde kaç isim-fiil vardır?", "2", "1", "0", "3"]]);
+        EXT(8, "Türkçe", "Fiillerde Çatı", [
+            ["‘Ali kapıyı açtı.’ cümlesinin fiil çatısı nedir?", "Etken", "Edilgen", "Dönüşlü", "İşteş"],
+            ["‘Kitap okundu.’ cümlesinin fiil çatısı nedir?", "Edilgen", "Etken", "Dönüşlü", "Ettirgen"],
+            ["‘Çocuklar birbirini itişti.’ cümlesinin fiil çatısı nedir?", "İşteş", "Etken", "Dönüşlü", "Edilgen"],
+            ["‘Annem bana yemek yaptırdı.’ cümlesinin fiil çatısı nedir?", "Ettirgen", "Etken", "Edilgen", "Dönüşlü"],
+            ["‘Kız aynada tarandı.’ cümlesinin fiil çatısı nedir?", "Dönüşlü", "Etken", "Edilgen", "İşteş"],
+            ["Öznesi belli olmayan fiil hangi çatıdadır?", "Edilgen", "Etken", "Dönüşlü", "İşteş"],
+            ["Öznenin eylemi yaptığı ve nesneye geçtiği fiil çatısı hangisidir?", "Etken", "Edilgen", "Dönüşlü", "İşteş"],
+            ["‘Birbirimize sarıldık.’ cümlesinin fiil çatısı nedir?", "İşteş", "Etken", "Dönüşlü", "Edilgen"],
+            ["‘-t’ ve ‘-dır’ ekleri hangi çatıyı yapar?", "Ettirgen", "Edilgen", "Dönüşlü", "İşteş"],
+            ["‘-ıl’ ve ‘-il’ ekleri hangi çatıyı yapar?", "Edilgen", "Ettirgen", "İşteş", "Dönüşlü"],
+            ["‘-ış’ ve ‘-iş’ ekleri hangi çatıyı yapar?", "İşteş", "Edilgen", "Ettirgen", "Dönüşlü"],
+            ["‘Ev boyandı.’ cümlesinin fiil çatısı nedir?", "Edilgen", "Etken", "Dönüşlü", "İşteş"],
+            ["‘Öğrenciler ödevlerini yaptı.’ cümlesinin fiil çatısı nedir?", "Etken", "Edilgen", "Dönüşlü", "Ettirgen"]]);
+        EXT(8, "Türkçe", "Cümle Türleri", [
+            ["Yüklemi fiil olan cümleye ne denir?", "Fiil cümlesi", "İsim cümlesi", "Devrik cümle", "Soru cümlesi"],
+            ["‘Okul çok büyük.’ cümlesi yüklemine göre nedir?", "İsim cümlesi", "Fiil cümlesi", "Olumsuz cümle", "Ünlem cümlesi"],
+            ["‘Bugün hava ne güzel!’ cümlesi anlamca nedir?", "Ünlem cümlesi", "Soru cümlesi", "Emir cümlesi", "Dilek cümlesi"],
+            ["‘Çabuk gel!’ cümlesi anlamca nedir?", "Emir cümlesi", "Haber cümlesi", "Soru cümlesi", "Ünlem cümlesi"],
+            ["‘Keşke yağmur yağsa.’ cümlesi anlamca nedir?", "Dilek (istek) cümlesi", "Emir cümlesi", "Soru cümlesi", "Haber cümlesi"],
+            ["‘Ders çalıştı.’ cümlesi olumlu mu olumsuz mu?", "Olumlu", "Olumsuz", "Soru", "Ünlem"],
+            ["‘Gelmedi.’ cümlesi hangi türdür?", "Olumsuz", "Olumlu", "Soru", "Emir"],
+            ["Tek yüklemli cümleye ne denir?", "Basit cümle", "Birleşik cümle", "Sıralı cümle", "Bağlı cümle"],
+            ["‘Eve gelince yemek yedik.’ cümlesi yapısına göre nedir?", "Birleşik cümle", "Basit cümle", "Sıralı cümle", "Bağlı cümle"],
+            ["‘Geldim, gördüm, yendim.’ cümlesi yapısına göre nedir?", "Sıralı cümle", "Basit cümle", "Birleşik cümle", "Bağlı cümle"],
+            ["‘Ali geldi ve Veli gitti.’ cümlesi yapısına göre nedir?", "Bağlı cümle", "Basit cümle", "Birleşik cümle", "Sıralı cümle"],
+            ["‘Dün gece yağmur yağdı.’ cümlesi yüklemine göre nedir?", "Fiil cümlesi", "İsim cümlesi", "Devrik cümle", "Soru cümlesi"],
+            ["Soru cümlelerinde soru anlamı hangi öğelerle sağlanır?", "Soru eki ‘mi’ ve soru sözcükleri", "Bağlaçlarla", "Edatlarla", "Ünlemlerle"]]);
+        EXT(8, "Fen Bilimleri", "Mevsimler ve İklim", [
+            ["Hava durumu ile iklim arasındaki fark nedir?", "İklim uzun yılların ortalamasıdır, hava durumu kısa süreli durumdur", "İkisi aynıdır", "Hava durumu uzun yıllık ortalamadır", "İklim sadece bugünkü havadır"],
+            ["Dünya'nın eksen eğikliği yaklaşık kaç derecedir?", "23,5°", "45°", "90°", "10°"],
+            ["Kuzey Yarım Küre'de 21 Aralık'ta hangi mevsim başlar?", "Kış", "Yaz", "İlkbahar", "Sonbahar"],
+            ["21 Mart ve 23 Eylül'de ne olur?", "Gece ve gündüz süreleri eşitlenir", "En uzun gündüz yaşanır", "En kısa gündüz yaşanır", "Tutulma olur"],
+            ["Kuzey Yarım Küre'de yaz yaşanırken Güney Yarım Küre'de hangi mevsim yaşanır?", "Kış", "Yaz", "İlkbahar", "Gece mevsimi"],
+            ["Ekvator çevresinde mevsim farkı nasıldır?", "Çok azdır", "Çok fazladır", "Sürekli kıştır", "Sürekli karlıdır"],
+            ["Hangisi iklimi etkileyen faktörlerden biridir?", "Yükselti", "Nüfus", "Okul sayısı", "Plaka"],
+            ["Küresel ısınmaya en çok neden olan sera gazı hangisidir?", "Karbondioksit", "Oksijen", "Azot", "Helyum"],
+            ["Sera etkisi nedir?", "Atmosferdeki gazların ısıyı tutması", "Havanın soğuması", "Yağmur yağması", "Rüzgâr esmesi"],
+            ["Küresel ısınmanın sonuçlarından biri hangisidir?", "Buzulların erimesi", "Deniz seviyesinin düşmesi", "Hava sıcaklığının azalması", "Karbondioksitin azalması"],
+            ["Akdeniz iklimi nasıldır?", "Yazlar sıcak ve kurak, kışlar ılık ve yağışlı", "Yazlar yağışlı", "Kışlar çok soğuk", "Her mevsim karlı"],
+            ["Yağış miktarını ölçmek için hangi alet kullanılır?", "Yağmurölçer", "Termometre", "Barometre", "Anemometre"],
+            ["Açık hava basıncını ölçen alet hangisidir?", "Barometre", "Termometre", "Higrometre", "Anemometre"]]);
+        EXT(8, "Fen Bilimleri", "DNA ve Genetik Kod", [
+            ["DNA'nın açılımı nedir?", "Deoksiribonükleik asit", "Ribonükleik asit", "Amino asit", "Protein"],
+            ["DNA'nın şekli nasıldır?", "Çift sarmal", "Tek sarmal", "Küre", "Kare"],
+            ["Genlerin görevi nedir?", "Kalıtsal özellikleri taşımak", "Enerji üretmek", "Besin sindirmek", "Oksijen taşımak"],
+            ["İnsan vücut hücresinde kaç kromozom bulunur?", "46", "23", "48", "44"],
+            ["Kalıtım nedir?", "Özelliklerin ebeveynlerden yavrulara aktarılması", "Besin alma", "Büyüme", "Solunum"],
+            ["Genetiğin kurucusu sayılan bilim insanı kimdir?", "Mendel", "Darwin", "Newton", "Pasteur"],
+            ["Baskın gen nedir?", "Özelliğin dışa yansımasını sağlayan gen", "Gizli kalan gen", "Hiç etkisi olmayan gen", "Yok olan gen"],
+            ["Çekinik gen ne zaman kendini gösterir?", "İki çekinik gen birlikteyse", "Her zaman", "Hiçbir zaman", "Baskın gen varsa"],
+            ["Genotip nedir?", "Canlının gen yapısı", "Dış görünüşü", "Boyu", "Rengi"],
+            ["Fenotip nedir?", "Canlının dış görünüşü", "Gen yapısı", "Kromozom sayısı", "DNA'nın uzunluğu"],
+            ["Mutasyon nedir?", "DNA'da meydana gelen kalıcı değişim", "Yemek yeme", "Mevsim değişimi", "Büyüme"],
+            ["Hangisi biyoteknolojiye örnektir?", "Aşı ve insülin üretimi", "Çiçek sulama", "Tabak yapımı", "Yol yapımı"],
+            ["Genetiği değiştirilmiş canlılara ne denir?", "GDO", "Tuz", "Cam", "Kâğıt"]]);
+        EXT(8, "Fen Bilimleri", "Basınç", [
+            ["Basınç birimi hangisidir?", "Pascal (Pa)", "Newton", "Joule", "Watt"],
+            ["Kuvvet 100 N, yüzey alanı 2 m² ise basınç kaç Pa'dır?", "50", "200", "102", "98"],
+            ["Kuvvet 60 N, yüzey alanı 3 m² ise basınç kaç Pa'dır?", "20", "180", "63", "57"],
+            ["Sıvı basıncı nelere bağlıdır?", "Derinliğe ve sıvının yoğunluğuna", "Kabın şekline", "Kabın rengine", "Kabın adına"],
+            ["Derinlere indikçe sıvı basıncı nasıl değişir?", "Artar", "Azalır", "Değişmez", "Sıfırlanır"],
+            ["Gaz basıncı neden oluşur?", "Gaz taneciklerinin kabın çeperine çarpmasıyla", "Işık yayılmasıyla", "Ses çıkmasıyla", "Renk değişmesiyle"],
+            ["Açık hava basıncını ölçen alet hangisidir?", "Barometre", "Termometre", "Dinamometre", "Pusula"],
+            ["Deniz seviyesinden yükseldikçe açık hava basıncı nasıl değişir?", "Azalır", "Artar", "Değişmez", "İki katına çıkar"],
+            ["Çivinin ucunun sivri olmasının amacı nedir?", "Alanı küçülterek basıncı artırmak", "Alanı artırmak", "Ağırlığı artırmak", "Rengini değiştirmek"],
+            ["Kar ayakkabıları neden geniş yapılır?", "Alanı artırıp basıncı azaltmak için", "Basıncı artırmak için", "Hızlandırmak için", "Isıtmak için"],
+            ["Pascal prensibi neyi anlatır?", "Kapalı kaptaki sıvıya uygulanan basınç her yöne aynı iletilir", "Katılar erir", "Gazlar genleşir", "Işık kırılır"],
+            ["Hidrolik araçlar hangi prensibi kullanır?", "Pascal prensibi", "Arşimet prensibi", "Newton'un 1. yasası", "Ohm yasası"],
+            ["Sıvılarda kaldırma kuvvetini bulan bilim insanı kimdir?", "Arşimet", "Pascal", "Galileo", "Newton"]]);
+        EXT(8, "T.C. İnkılap Tarihi ve Atatürkçülük", "Bir Kahraman Doğuyor", [
+            ["Atatürk hangi yıl doğmuştur?", "1881", "1919", "1923", "1938"],
+            ["Atatürk'ün babasının adı nedir?", "Ali Rıza Efendi", "Hasan", "Mehmet", "Ahmet"],
+            ["Mustafa'ya ‘Kemal’ adını veren öğretmeni kimdir?", "Matematik öğretmeni Mustafa Efendi", "Şemsi Efendi", "Ali Rıza Efendi", "Fatih"],
+            ["Mustafa Kemal Harp Okulu'na hangi şehirde girmiştir?", "İstanbul", "Selanik", "Ankara", "Bursa"],
+            ["Çanakkale Savaşları hangi yıl başlamıştır?", "1915", "1914", "1919", "1923"],
+            ["Mustafa Kemal Çanakkale'de hangi bölgede önemli başarılar kazanmıştır?", "Arıburnu ve Conkbayırı", "Sarıkamış", "Dumlupınar", "Kut'ül-Amare"],
+            ["I. Dünya Savaşı hangi yıllar arasında yaşanmıştır?", "1914–1918", "1900–1905", "1939–1945", "1923–1930"],
+            ["Osmanlı Devleti I. Dünya Savaşı'na kimlerin yanında katılmıştır?", "Almanya'nın yanında", "İngiltere'nin yanında", "Fransa'nın yanında", "Rusya'nın yanında"],
+            ["Mondros Ateşkes Antlaşması hangi yıl imzalanmıştır?", "1918", "1914", "1920", "1923"],
+            ["Sevr Antlaşması hangi yıl imzalanmıştır?", "1920", "1918", "1923", "1919"],
+            ["Mustafa Kemal'in ‘Size ölmeyi emrediyorum’ dediği yer neresidir?", "Conkbayırı", "Sakarya", "Dumlupınar", "Sarıkamış"],
+            ["Mustafa Kemal İstanbul'dan Samsun'a hangi gemiyle gitmiştir?", "Bandırma Vapuru", "Yavuz", "Mesudiye", "Goeben"],
+            ["Atatürk'ün doğduğu şehir olan Selanik bugün hangi ülkededir?", "Yunanistan", "Türkiye", "Bulgaristan", "Makedonya"]]);
+        EXT(8, "T.C. İnkılap Tarihi ve Atatürkçülük", "Milli Uyanış", [
+            ["Amasya Genelgesi hangi yıl yayımlanmıştır?", "1919", "1920", "1921", "1923"],
+            ["Sivas Kongresi'nde alınan önemli kararlardan biri hangisidir?", "Manda ve himaye fikri reddedildi", "Saltanat kaldırıldı", "Cumhuriyet ilan edildi", "Halifelik kaldırıldı"],
+            ["Erzurum Kongresi'nde neyin üzerinde durulmuştur?", "Vatanın bölünmezliği", "Cumhuriyetin ilanı", "Harf devrimi", "Lozan Barışı"],
+            ["TBMM hangi tarihte açılmıştır?", "23 Nisan 1920", "29 Ekim 1923", "19 Mayıs 1919", "30 Ağustos 1922"],
+            ["TBMM'nin ilk Başkanı kimdir?", "Mustafa Kemal", "İsmet İnönü", "Ali Fuat", "Kazım Karabekir"],
+            ["Düzenli ordu kurulmadan önce direnen yerel güçlere ne denir?", "Kuva-yı Milliye", "Yeniçeri", "Nizam-ı Cedid", "Sekban"],
+            ["I. İnönü Savaşı hangi cephede yapılmıştır?", "Batı Cephesi", "Doğu Cephesi", "Güney Cephesi", "Kafkas Cephesi"],
+            ["Sakarya Savaşı'ndan sonra Mustafa Kemal'e hangi unvanlar verilmiştir?", "Gazilik ve Mareşallik", "Paşalık", "Sadrazamlık", "Sultanlık"],
+            ["Zafer Bayramı hangi tarihte kutlanır?", "30 Ağustos", "9 Eylül", "23 Nisan", "19 Mayıs"],
+            ["İzmir'in kurtuluşu hangi tarihte gerçekleşmiştir?", "9 Eylül 1922", "30 Ağustos 1922", "29 Ekim 1923", "23 Nisan 1920"],
+            ["Mudanya Ateşkes Antlaşması hangi yıl imzalanmıştır?", "1922", "1920", "1923", "1918"],
+            ["Lozan Barış Antlaşması hangi yıl imzalanmıştır?", "1923", "1920", "1922", "1924"],
+            ["Misak-ı Millî'nin amacı nedir?", "Milli sınırları belirlemek", "Cumhuriyeti ilan etmek", "Halifeliği kaldırmak", "Harf devrimi yapmak"]]);
+        EXT(8, "T.C. İnkılap Tarihi ve Atatürkçülük", "Atatürkçülük", [
+            ["Saltanat hangi yıl kaldırılmıştır?", "1922", "1923", "1924", "1920"],
+            ["Halifelik hangi yıl kaldırılmıştır?", "1924", "1922", "1923", "1928"],
+            ["Tevhid-i Tedrisat Kanunu ile ne sağlanmıştır?", "Eğitim birliği", "Harf birliği", "Kıyafet birliği", "Takvim birliği"],
+            ["Türk Medeni Kanunu hangi yıl kabul edilmiştir?", "1926", "1923", "1934", "1928"],
+            ["Kadınlara milletvekili seçme ve seçilme hakkı hangi yıl verilmiştir?", "1934", "1926", "1930", "1923"],
+            ["Soyadı Kanunu hangi yıl kabul edilmiştir?", "1934", "1928", "1923", "1925"],
+            ["‘Atatürk’ soyadını Mustafa Kemal'e kim vermiştir?", "TBMM", "Halk oylaması", "İsmet İnönü", "Ordu"],
+            ["Atatürk hangi tarihte vefat etmiştir?", "10 Kasım 1938", "29 Ekim 1923", "23 Nisan 1920", "19 Mayıs 1919"],
+            ["Egemenliğin kayıtsız şartsız millete ait olmasını savunan ilke hangisidir?", "Cumhuriyetçilik", "Milliyetçilik", "Laiklik", "Devletçilik"],
+            ["Din ve devlet işlerinin ayrılmasını savunan ilke hangisidir?", "Laiklik", "Halkçılık", "Devrimcilik", "Milliyetçilik"],
+            ["Devletin ekonomide düzenleyici ve yatırımcı olmasını savunan ilke hangisidir?", "Devletçilik", "Halkçılık", "Laiklik", "Cumhuriyetçilik"],
+            ["Sürekli yenilenme ve ilerleme ilkesi hangisidir?", "Devrimcilik (İnkılapçılık)", "Laiklik", "Halkçılık", "Milliyetçilik"],
+            ["Kanun önünde eşitlik ve ayrıcalıksızlık ilkesi hangisidir?", "Halkçılık", "Laiklik", "Devletçilik", "Milliyetçilik"]]);
+
+        const getCurriculumForGrade = (gradeStr) => {
+            const grade = parseInt(gradeStr);
+            let courses = {};
+            if (grade >= 5 && GRADE_CONTENT[grade]) {
+                const styles = [
+                    [<Calculator className="w-8 h-8" />, "bg-blue-600/20 text-blue-400 border-blue-500/30 hover:border-blue-500"],
+                    [<BookOpen className="w-8 h-8" />, "bg-red-600/20 text-red-400 border-red-500/30 hover:border-red-500"],
+                    [<Beaker className="w-8 h-8" />, "bg-emerald-600/20 text-emerald-400 border-emerald-500/30 hover:border-emerald-500"],
+                    [<Users className="w-8 h-8" />, "bg-purple-600/20 text-purple-400 border-purple-500/30 hover:border-purple-500"],
+                    [<Globe className="w-8 h-8" />, "bg-amber-600/20 text-amber-400 border-amber-500/30 hover:border-amber-500"],
+                    [<Sparkles className="w-8 h-8" />, "bg-teal-600/20 text-teal-300 border-teal-500/30 hover:border-teal-500"]
+                ];
+                const order = { "Matematik": 0, "Türkçe": 1, "Fen Bilimleri": 2, "Sosyal Bilgiler": 3, "T.C. İnkılap Tarihi ve Atatürkçülük": 3, "İngilizce": 4, "Din Kültürü ve Ahlak Bilgisi": 5 };
+                Object.keys(GRADE_CONTENT[grade]).forEach((name, i) => {
+                    courses[name] = { icon: styles[order[name] ?? (i % 6)][0], topics: Object.keys(GRADE_CONTENT[grade][name]), color: styles[order[name] ?? (i % 6)][1] };
+                });
+                return courses;
+            }
+            
+            courses["Matematik"] = { icon: <Calculator className="w-8 h-8" />, topics: BASE_TOPICS["Matematik"], color: "bg-blue-600/20 text-blue-400 border-blue-500/30 hover:border-blue-500" };
+            courses["Türkçe"] = { icon: <BookOpen className="w-8 h-8" />, topics: BASE_TOPICS["Türkçe"], color: "bg-red-600/20 text-red-400 border-red-500/30 hover:border-red-500" };
+            
+            if (grade <= 3) {
+                courses["Hayat Bilgisi"] = { icon: <Globe className="w-8 h-8" />, topics: BASE_TOPICS["Hayat Bilgisi"], color: "bg-amber-600/20 text-amber-400 border-amber-500/30 hover:border-amber-500" };
+            } else {
+                courses["Fen Bilimleri"] = { icon: <Beaker className="w-8 h-8" />, topics: BASE_TOPICS["Fen Bilimleri"], color: "bg-emerald-600/20 text-emerald-400 border-emerald-500/30 hover:border-emerald-500" };
+                courses["Sosyal Bilgiler"] = { icon: <Users className="w-8 h-8" />, topics: BASE_TOPICS["Sosyal Bilgiler"], color: "bg-purple-600/20 text-purple-400 border-purple-500/30 hover:border-purple-500" };
+            }
+            return courses;
+        };
+
+        function App() {
+            const [firebaseUser, setFirebaseUser] = useState(null); 
+            const [view, setView] = useState('login'); 
+            const [user, setUser] = useState(null); 
+            
+            const [accounts, setAccounts] = useState([]);
+            const [announcements, setAnnouncements] = useState([]); 
+            
+            const [selectedCourse, setSelectedCourse] = useState(null);
+            const [selectedTopic, setSelectedTopic] = useState(null);
+            const [quiz, setQuiz] = useState(null);
+            const [analysis, setAnalysis] = useState(null);
+            const [ansState, setAnsState] = useState({ sel: null, show: false, correct: null });
+            const [showStore, setShowStore] = useState(false);
+            
+            const [gameState, setGameState] = useState('menu');
+            const [gameScore, setGameScore] = useState(0);
+            const [timeLeft, setTimeLeft] = useState(60);
+            const [currentMathQ, setCurrentMathQ] = useState(null);
+            
+            const [newAcc, setNewAcc] = useState({ name: '', grade: '5', code: '' }); 
+            const [authTab, setAuthTab] = useState('login');
+            const [regStep, setRegStep] = useState('form');
+            const [loginForm, setLoginForm] = useState({ email: '', password: '' });
+            const [regForm, setRegForm] = useState({ first: '', last: '', email: '', pass: '', pass2: '', grade: '5' });
+            const [codeInput, setCodeInput] = useState('');
+            const [cooldown, setCooldown] = useState(0);
+            const [authBusy, setAuthBusy] = useState(false);
+            const [adminForm, setAdminForm] = useState({ name: '', password: '' });
+            const pendingRef = useRef(null);
+            const registeringRef = useRef(false);
+            const userIdRef = useRef(null);
+            const annIdsRef = useRef(new Set());
+            const annLoadedRef = useRef(false);
+            const [toast, setToast] = useState(null);
+
+            const [newAnn, setNewAnn] = useState({ title: '', message: '' }); 
+
+            const [aiOpen, setAiOpen] = useState(false);
+            const [aiLoading, setAiLoading] = useState(false);
+            const [chat, setChat] = useState([{ role: 'bot', text: 'Merhaba! Ben Sezan TMD. Takıldığın her soruyu bana sorabilirsin! 🚀' }]);
+            const [input, setInput] = useState("");
+            const scrollRef = useRef(null);
+
+            useEffect(() => {
+                if (!sb) return;
+                const loadProfile = async (session) => {
+                    const fb = session ? session.user : null;
+                    setFirebaseUser(fb);
+                    if (!fb) { userIdRef.current = null; setUser(null); setView('login'); return; }
+                    if (registeringRef.current) return;
+                    const { data, error } = await sb.from('profiles').select('*').eq('id', fb.id).maybeSingle();
+                    if (data && data.status === 'banned') { await sb.auth.signOut(); alert('Hesabın yasaklandı. Yönetici ile iletişime geç.'); return; }
+                    if (data) {
+                        userIdRef.current = fb.id;
+                        sb.from('profiles').update({ is_online: true }).eq('id', fb.id).then(() => {});
+                        setUser({ ...mapProfile(data), isOnline: true });
+                        setView(v => (v === 'login' ? 'dashboard' : v));
+                    } else if (!error) { await sb.auth.signOut(); }
+                };
+                sb.auth.getSession().then(({ data }) => loadProfile(data.session));
+                const { data: sub } = sb.auth.onAuthStateChange((event, session) => {
+                    if (event === 'SIGNED_OUT') setTimeout(() => loadProfile(null), 0);
+                    else if (event === 'SIGNED_IN' && session && userIdRef.current !== session.user.id) setTimeout(() => loadProfile(session), 0);
+                    else if (event === 'PASSWORD_RECOVERY') {
+                        setTimeout(() => {
+                            const np = window.prompt('Yeni şifreni yaz (en az 6 karakter):');
+                            if (np && np.length >= 6) sb.auth.updateUser({ password: np }).then(({ error }) => alert(error ? error.message : 'Şifre güncellendi!'));
+                        }, 100);
+                    }
+                });
+                return () => sub.subscription.unsubscribe();
+            }, []);
+
+            useEffect(() => {
+                if (!toast) return;
+                const t = setTimeout(() => setToast(null), 9000);
+                return () => clearTimeout(t);
+            }, [toast]);
+
+            useEffect(() => {
+                if (cooldown <= 0) return;
+                const t = setTimeout(() => setCooldown(c => c - 1), 1000);
+                return () => clearTimeout(t);
+            }, [cooldown]);
+
+            useEffect(() => {
+                if (!firebaseUser || !sb) return;
+                const loadAcc = async () => {
+                    const { data } = await sb.from('profiles').select('*');
+                    if (!data) return;
+                    const mapped = data.map(mapProfile);
+                    setAccounts(mapped);
+                    const me = mapped.find(a => a.id === userIdRef.current);
+                    if (me && me.status === 'banned') { await sb.auth.signOut(); alert('Hesabın yasaklandı.'); }
+                    else if (me) setUser(u => (u && u.id === me.id && u.status !== me.status ? { ...u, status: me.status } : u));
+                };
+                const loadAnn = async () => {
+                    const { data } = await sb.from('announcements').select('*');
+                    if (!data) return;
+                    const fresh = data.filter(a => !annIdsRef.current.has(a.id));
+                    data.forEach(a => annIdsRef.current.add(a.id));
+                    if (annLoadedRef.current && fresh.length) {
+                        const n = [...fresh].sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+                        setToast(n);
+                    }
+                    annLoadedRef.current = true;
+                    setAnnouncements(data);
+                };
+                loadAcc(); loadAnn();
+                const ch = sb.channel('sezan-live')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => loadAcc())
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => loadAnn())
+                    .subscribe();
+                const poll = setInterval(loadAcc, 30000);
+                return () => { sb.removeChannel(ch); clearInterval(poll); };
+            }, [firebaseUser && firebaseUser.id]);
+
+            useEffect(() => {
+                if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+            }, [chat, aiLoading]);
+
+            useEffect(() => {
+                const handleUnload = () => {
+                    if (sb && user && !user.isSpecial) {
+                        sb.from('profiles').update({ is_online: false }).eq('id', user.id).then(() => {});
+                    }
+                };
+                window.addEventListener('beforeunload', handleUnload);
+                return () => window.removeEventListener('beforeunload', handleUnload);
+            }, [user]);
+
+            const getLeaderboard = useMemo(() => {
+                return [...accounts]
+                .filter(a => !a.isSpecial && a.role !== 'admin')
+                .sort((a, b) => (b.points || 0) - (a.points || 0))
+                ;
+            }, [accounts]);
+
+            const sortedAnnouncements = useMemo(() => {
+                return [...announcements].sort((a, b) => new Date(b.date) - new Date(a.date));
+            }, [announcements]);
+
+            const authError = (err) => {
+                const m = ((err && err.code) || '') + ' ' + ((err && err.message) || '');
+                const t = m.toLowerCase();
+                if (t.includes('invalid') && t.includes('credential')) return 'E-posta veya şifre hatalı!';
+                if (t.includes('already') || t.includes('registered')) return 'Bu e-posta ile zaten bir hesap var. Giriş yapmayı dene.';
+                if (t.includes('weak') || t.includes('password should')) return 'Şifre en az 6 karakter olmalı.';
+                if (t.includes('rate') || t.includes('too many')) return 'Çok fazla deneme yapıldı, biraz bekle.';
+                if (t.includes('not confirmed') || t.includes('confirm')) return 'E-posta onayı açık görünüyor (Supabase ayarı).';
+                if (t.includes('fetch') || t.includes('network')) return 'İnternet bağlantısı yok.';
+                return 'Bir hata oluştu: ' + ((err && err.message) || 'bilinmeyen');
+            };
+
+            const handleLogin = async (e) => {
+                e.preventDefault();
+                if (!auth) return alert('Bağlantı kurulamadı!');
+                setAuthBusy(true);
+                try {
+                    const { error } = await sb.auth.signInWithPassword({ email: loginForm.email.trim(), password: loginForm.password });
+                    if (error) throw error;
+                } catch (err) { alert(authError(err)); }
+                setAuthBusy(false);
+            };
+
+            const ADMIN_EMAILS = { weriqx: 'weriqx@example.com', selim: 'selim@example.com' };
+            const handleAdminLogin = async (e) => {
+                e.preventDefault();
+                if (!sb) return alert('Bağlantı kurulamadı!');
+                const em = ADMIN_EMAILS[adminForm.name.trim().toLowerCase()];
+                if (!em) return alert('İsim veya şifre hatalı!');
+                const pw = adminForm.password.length < 6 ? adminForm.password + '#sz' : adminForm.password;
+                setAuthBusy(true);
+                try {
+                    const { error } = await sb.auth.signInWithPassword({ email: em, password: pw });
+                    if (error) throw error;
+                } catch (err) { alert('İsim veya şifre hatalı!'); }
+                setAuthBusy(false);
+            };
+
+            const handleForgot = async () => {
+                if (!auth || !loginForm.email.trim()) return alert('Önce e-posta adresini yaz.');
+                try { const { error } = await sb.auth.resetPasswordForEmail(loginForm.email.trim(), { redirectTo: window.location.origin }); if (error) throw error; alert('Şifre sıfırlama bağlantısı e-postana gönderildi.'); }
+                catch (err) { alert(authError(err)); }
+            };
+
+            const sendVerificationCode = async (e) => {
+                if (e) e.preventDefault();
+                if (!auth) return alert('Bağlantı kurulamadı!');
+                const f = { ...regForm, first: regForm.first.trim(), last: regForm.last.trim(), email: regForm.email.trim().toLowerCase() };
+                if (!f.first || !f.last) return alert('İsim ve soyisim zorunlu.');
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) return alert('Geçerli bir e-posta yaz.');
+                if (f.pass.length < 6) return alert('Şifre en az 6 karakter olmalı.');
+                if (f.pass !== f.pass2) return alert('Şifreler aynı değil!');
+                const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, '0');
+                setAuthBusy(true);
+                try {
+                    await window.emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID,
+                        { to_email: f.email, email: f.email, to_name: f.first, name: f.first, code: code },
+                        { publicKey: EMAILJS_PUBLIC_KEY });
+                    pendingRef.current = { code, exp: Date.now() + 10 * 60 * 1000, tries: 0, form: f };
+                    setCodeInput(''); setRegStep('code'); setCooldown(60);
+                } catch (err) { console.error(err); alert('Kod gönderilemedi. E-postayı kontrol edip tekrar dene.'); }
+                setAuthBusy(false);
+            };
+
+            const verifyCodeAndRegister = async (e) => {
+                e.preventDefault();
+                const p = pendingRef.current;
+                if (!p) { setRegStep('form'); return; }
+                if (Date.now() > p.exp) { pendingRef.current = null; setRegStep('form'); return alert('Kodun süresi doldu. Yeniden kayıt ol.'); }
+                if (p.tries >= 5) { pendingRef.current = null; setRegStep('form'); return alert('Çok fazla yanlış deneme. Yeniden kayıt ol.'); }
+                if (codeInput.trim() !== p.code) { p.tries += 1; return alert('Kod yanlış! Kalan hak: ' + (5 - p.tries)); }
+                const f = p.form;
+                setAuthBusy(true);
+                registeringRef.current = true;
+                try {
+                    const { data: su, error: suErr } = await sb.auth.signUp({ email: f.email, password: f.pass, options: { data: { first_name: f.first, last_name: f.last, grade: f.grade } } });
+                    if (suErr) throw suErr;
+                    if (!su.session) {
+                        const r = await sb.auth.signInWithPassword({ email: f.email, password: f.pass });
+                        if (r.error) throw r.error;
+                    }
+                    const uid = su.user.id;
+                    const { data: prof, error: profErr } = await sb.from('profiles').select('*').eq('id', uid).single();
+                    if (profErr) throw profErr;
+                    const accountData = { ...mapProfile(prof), isOnline: true };
+                    sb.from('profiles').update({ is_online: true }).eq('id', uid).then(() => {});
+                    userIdRef.current = uid;
+                    pendingRef.current = null;
+                    setUser(accountData);
+                    setView('dashboard');
+                    setRegForm({ first: '', last: '', email: '', pass: '', pass2: '', grade: '5' });
+                    setRegStep('form');
+                } catch (err) {
+                    alert(authError(err));
+                    if (((err && err.message) || '').toLowerCase().includes('registered')) { pendingRef.current = null; setRegStep('form'); }
+                }
+                registeringRef.current = false;
+                setAuthBusy(false);
+            };
+
+            const handleLogout = async () => {
+                if (sb && user && !user.isSpecial) {
+                    try { await sb.from('profiles').update({ is_online: false }).eq('id', user.id); } catch (e) {}
+                }
+                if (sb) { userIdRef.current = null; await sb.auth.signOut(); }
+                setUser(null);
+                setView('login');
+                setSelectedCourse(null);
+                setQuiz(null);
+                setGameState('menu');
+            };
+
+            // GÜNCELLENDİ: SADECE DB KONTROLÜ YERİNE YEREL (LOCAL) DESTEK
+            const handleSetStatus = async (accId, status) => {
+                const msg = { frozen: 'Bu hesabı dondurmak istiyor musun? Hiçbir şey yapamaz.', banned: 'Bu hesabı yasaklamak istiyor musun? Giriş yapamaz.', active: '' }[status];
+                if (msg && !window.confirm(msg)) return;
+                const { error } = await sb.rpc('set_status', { target: accId, new_status: status });
+                if (error) return alert('Yapılamadı: ' + error.message);
+                setAccounts(prev => prev.map(a => (a.id === accId ? { ...a, status } : a)));
+            };
+
+            const handleDeleteAccount = (accId) => {
+                if (window.confirm("Bu hesabın profilini silmek istediğinize emin misiniz?")) {
+                    sb.from('profiles').delete().eq('id', accId).then(({ error }) => {
+                        if (error) alert('Silinemedi: ' + error.message);
+                        else setAccounts(prev => prev.filter(a => a.id !== accId));
+                    });
+                }
+            };
+
+            const handleCreateAnnouncement = async (e) => {
+                e.preventDefault();
+                if (!newAnn.title.trim() || !newAnn.message.trim()) return;
+                const { data, error } = await sb.from('announcements').insert({ title: newAnn.title, message: newAnn.message, author: user.name + ' • Yönetici' }).select().single();
+                if (error) return alert('Duyuru eklenemedi: ' + error.message);
+                annIdsRef.current.add(data.id);
+                setAnnouncements(prev => [...prev.filter(a => a.id !== data.id), data]);
+                setNewAnn({ title: '', message: '' });
+            };
+
+            const handleDeleteAnnouncement = async (id) => {
+                if (window.confirm("Bu duyuruyu silmek istiyor musunuz?")) {
+                    const { error } = await sb.from('announcements').delete().eq('id', id);
+                    if (error) alert('Silinemedi: ' + error.message);
+                    else setAnnouncements(prev => prev.filter(a => a.id !== id));
+                }
+            };
+
+            const startQuiz = (topicName, count) => {
+                const gNum = parseInt(user?.grade);
+                const bank = (gNum >= 5 && GRADE_CONTENT[gNum]) ? GRADE_CONTENT[gNum] : QUESTION_BANK;
+                const courseData = bank[selectedCourse] || {};
+                let pool = courseData[topicName] || [];
+                if (typeof pool === 'function') { const gen = pool; pool = Array.from({ length: 10 }, () => gen()); }
+                
+                if (pool.length === 0) {
+                    pool = [{ q: "Sistemde bu konuya ait soru bulunamadı.", a: "Tamam", w: ["Hata", "Bekle", "Çıkış"], ex: "Sistem güncelleniyor." }];
+                }
+
+                const shuffledPool = shuffleArray(pool);
+                const actualCount = Math.min(count, pool.length);
+                const processedQuestions = shuffledPool.slice(0, actualCount).map(q => ({
+                   ...q, opts: shuffleArray([q.a, ...q.w])
+                }));
+                
+                setQuiz({ current: 0, correct: 0, topic: topicName, questions: processedQuestions });
+                setAnsState({ sel: null, show: false, correct: null });
+            };
+
+            const handleAnswer = (opt) => {
+                if (ansState.show) return;
+                const currentQuestion = quiz.questions[quiz.current];
+                const isCorrect = opt === currentQuestion.a;
+                setAnsState({ sel: opt, show: true, correct: currentQuestion.a });
+                
+                if (isCorrect) updateUserPoints(10);
+                else updateUserPoints(-6);
+
+                setTimeout(() => {
+                const nextCorrect = isCorrect ? quiz.correct + 1 : quiz.correct;
+                if (quiz.current + 1 < quiz.questions.length) {
+                    setQuiz({ ...quiz, current: quiz.current + 1, correct: nextCorrect });
+                    setAnsState({ sel: null, show: false, correct: null });
+                } else {
+                    setAnalysis({ score: ((nextCorrect / quiz.questions.length) * 100).toFixed(0), correct: nextCorrect, total: quiz.questions.length });
+                    setQuiz(null);
+                    setAnsState({ sel: null, show: false, correct: null });
+                }
+                }, 2800);
+            };
+
+            const updateUserPoints = (amount) => {
+                const newPoints = (user.points || 0) + amount;
+                setUser(prev => ({ ...prev, points: newPoints }));
+                if (sb && user.id && !user.isSpecial) sb.from('profiles').update({ points: newPoints }).eq('id', user.id).then(({ error }) => { if (error) console.error(error); });
+            };
+
+            const generateMathQuestion = () => {
+                const grade = parseInt(user?.grade || "1");
+                const isAdvanced = grade >= 4;
+                const ops = isAdvanced ? ['+', '-', 'x'] : ['+', '-'];
+                const op = ops[Math.floor(Math.random() * ops.length)];
+                let a = Math.floor(Math.random() * (grade * 10)) + 1;
+                let b = Math.floor(Math.random() * (grade * 10)) + 1;
+                let answer = 0;
+                if (op === '+') answer = a + b;
+                else if (op === '-') { if (b > a) [a, b] = [b, a]; answer = a - b; }
+                else if (op === 'x') { a = Math.floor(Math.random() * 10) + 1; b = Math.floor(Math.random() * 10) + 1; answer = a * b; }
+                let w1 = answer + Math.floor(Math.random() * 5) + 1;
+                let w2 = answer - Math.floor(Math.random() * 5) - 1;
+                let w3 = answer + 10;
+                const opts = shuffleArray([answer, w1, w2, w3]);
+                setCurrentMathQ({ q: `${a} ${op} ${b} = ?`, a: answer, opts });
+            };
+
+            const startGame = () => { setGameState('playing'); setGameScore(0); setTimeLeft(60); generateMathQuestion(); };
+
+            useEffect(() => {
+                let timer = null;
+                if (gameState === 'playing') {
+                timer = setInterval(() => {
+                    setTimeLeft((prev) => {
+                    if (prev <= 1) {
+                        clearInterval(timer);
+                        setGameState('over');
+                        return 0;
+                    }
+                    return prev - 1;
+                    });
+                }, 1000);
+                }
+                return () => clearInterval(timer);
+            }, [gameState]);
+
+            const handleGameAnswer = (opt) => {
+                if (opt === currentMathQ.a) { 
+                    setGameScore(prev => prev + 10); 
+                    updateUserPoints(10); 
+                    generateMathQuestion(); 
+                } else { 
+                    setGameScore(prev => prev - 6); 
+                    updateUserPoints(-6); 
+                }
+            };
+
+            const handleBuyAvatar = (av) => {
+                if (user.points >= av.price) {
+                const newPoints = user.points - av.price;
+                const newUnlocked = [...user.unlocked, av.id];
+                setUser({ ...user, points: newPoints, unlocked: newUnlocked, avatar: av.id });
+                if (sb && user.id && !user.isSpecial) sb.from('profiles').update({ points: newPoints, unlocked: newUnlocked, avatar: av.id }).eq('id', user.id).then(({ error }) => { if (error) console.error(error); });
+                } else alert("Yetersiz Yıldız!");
+            };
+
+            const askAi = async () => {
+                if (!input.trim() || aiLoading) return;
+                const userMsg = input;
+                setChat(prev => [...prev, { role: 'user', text: userMsg }]);
+                setInput(""); setAiLoading(true);
+                
+                try {
+                let retries = 5; 
+                let delay = 1000;
+                let response;
+                while (retries > 0) {
+                    try {
+                    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: userMsg }] }], systemInstruction: { parts: [{ text: `Sen Sezan TMD Eğitim asistanısın. Kısa, eğlenceli ve öğretici cevap ver, emoji kullan.` }] } })
+                    });
+                    if (response.ok) break;
+                    } catch (e) {}
+                    retries--; 
+                    await new Promise(res => setTimeout(res, delay));
+                    delay *= 2;
+                }
+                if (!response || !response.ok) throw new Error("API hatası");
+                const data = await response.json();
+                setChat(prev => [...prev, { role: 'bot', text: data.candidates?.[0]?.content?.parts?.[0]?.text || "Anlamadım." }]);
+                } catch { setChat(prev => [...prev, { role: 'bot', text: "Hata oluştu." }]); } finally { setAiLoading(false); }
+            };
+
+            const curAvatar = AVATARS.find(a => a.id === (user?.avatar || 'standard'));
+
+            // UI EKRANLARI
+            if (user && user.status === 'frozen' && !user.isSpecial) return (
+                <div className="min-h-screen bg-[#090d1f] flex items-center justify-center p-6 text-white font-sans text-center">
+                    <div className="max-w-sm bg-slate-900/80 border border-cyan-500/30 p-10 rounded-[2.5rem]">
+                        <div className="text-6xl mb-4">🧊</div>
+                        <h2 className="text-2xl font-black uppercase mb-3 text-cyan-300">Hesabın Donduruldu</h2>
+                        <p className="text-sm text-white/60 mb-6">Yönetici hesabını geçici olarak dondurdu. Şu an ders çözemez ve hiçbir işlem yapamazsın. Sorun için yöneticiyle konuş.</p>
+                        <button onClick={handleLogout} className="px-6 py-3 rounded-2xl bg-slate-800 border border-white/10 font-bold text-xs uppercase">Çıkış Yap</button>
+                    </div>
+                </div>
+            );
+
+            if (view === 'login') return (
+                <div className="min-h-screen bg-[#090d1f] flex items-center justify-center p-4 text-white font-sans">
+                <div className="bg-slate-900/80 backdrop-blur-xl border border-white/10 p-8 rounded-[2.5rem] w-full max-w-md text-center shadow-2xl">
+                    <div className="w-20 h-20 bg-gradient-to-tr from-blue-600 to-indigo-500 rounded-3xl flex items-center justify-center mx-auto mb-5"><GraduationCap size={44} className="text-white" /></div>
+                    <h1 className="text-3xl font-black italic mb-4 tracking-tighter bg-gradient-to-r from-blue-400 to-indigo-300 bg-clip-text text-transparent uppercase">SEZAN AKADEMİ</h1>
+                    {!auth && <p className="text-red-400 text-xs font-bold mb-4">Supabase bağlantısı kurulamadı.</p>}
+                    <div className="flex gap-2 mb-5 bg-white/5 p-1 rounded-2xl">
+                        <button type="button" onClick={() => setAuthTab('login')} className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase ${authTab === 'login' ? 'bg-blue-600' : 'text-white/50'}`}>Giriş</button>
+                        <button type="button" onClick={() => { setAuthTab('register'); setRegStep('form'); }} className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase ${authTab === 'register' ? 'bg-blue-600' : 'text-white/50'}`}>Kayıt Ol</button>
+                        <button type="button" onClick={() => setAuthTab('admin')} className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase ${authTab === 'admin' ? 'bg-purple-600' : 'text-white/50'}`}>Yönetici</button>
+                    </div>
+
+                    {authTab === 'admin' ? (
+                    <form onSubmit={handleAdminLogin} className="space-y-3 text-left">
+                        <p className="text-[10px] text-purple-300 font-bold uppercase text-center mb-1">Yönetici Girişi</p>
+                        <input required placeholder="İsim" value={adminForm.name} onChange={e => setAdminForm({ ...adminForm, name: e.target.value })} className="w-full p-4 rounded-2xl bg-white/5 border border-white/10 outline-none focus:border-purple-500 text-sm" />
+                        <input type="password" required placeholder="Şifre" value={adminForm.password} onChange={e => setAdminForm({ ...adminForm, password: e.target.value })} className="w-full p-4 rounded-2xl bg-white/5 border border-white/10 outline-none focus:border-purple-500 text-sm" />
+                        <button disabled={authBusy} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 py-4 rounded-2xl font-black uppercase disabled:opacity-50">{authBusy ? 'Bekle...' : 'Yönetici Girişi'}</button>
+                    </form>
+                    ) : authTab === 'login' ? (
+                    <form onSubmit={handleLogin} className="space-y-3 text-left">
+                        <input type="email" required placeholder="E-posta" value={loginForm.email} onChange={e => setLoginForm({ ...loginForm, email: e.target.value })} className="w-full p-4 rounded-2xl bg-white/5 border border-white/10 outline-none focus:border-blue-500 text-sm" />
+                        <input type="password" required placeholder="Şifre" value={loginForm.password} onChange={e => setLoginForm({ ...loginForm, password: e.target.value })} className="w-full p-4 rounded-2xl bg-white/5 border border-white/10 outline-none focus:border-blue-500 text-sm" />
+                        <button disabled={authBusy} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 py-4 rounded-2xl font-black uppercase flex items-center justify-center gap-2 disabled:opacity-50">{authBusy ? 'Bekle...' : 'Giriş Yap'} <ChevronRight size={18}/></button>
+                        <button type="button" onClick={handleForgot} className="w-full text-[11px] text-white/40 underline">Şifremi unuttum</button>
+                    </form>
+                    ) : regStep === 'form' ? (
+                    <form onSubmit={sendVerificationCode} className="space-y-3 text-left">
+                        <div className="flex gap-2">
+                            <input required placeholder="İsim" value={regForm.first} onChange={e => setRegForm({ ...regForm, first: e.target.value })} className="w-full p-4 rounded-2xl bg-white/5 border border-white/10 outline-none focus:border-blue-500 text-sm" />
+                            <input required placeholder="Soyisim" value={regForm.last} onChange={e => setRegForm({ ...regForm, last: e.target.value })} className="w-full p-4 rounded-2xl bg-white/5 border border-white/10 outline-none focus:border-blue-500 text-sm" />
+                        </div>
+                        <input type="email" required placeholder="E-posta" value={regForm.email} onChange={e => setRegForm({ ...regForm, email: e.target.value })} className="w-full p-4 rounded-2xl bg-white/5 border border-white/10 outline-none focus:border-blue-500 text-sm" />
+                        <select value={regForm.grade} onChange={e => setRegForm({ ...regForm, grade: e.target.value })} className="w-full p-4 rounded-2xl bg-slate-800 border border-white/10 outline-none text-sm">
+                            {[1,2,3,4,5,6,7,8].map(g => <option key={g} value={g}>{g}. Sınıf</option>)}
+                        </select>
+                        <input type="password" required placeholder="Şifre (en az 6 karakter)" value={regForm.pass} onChange={e => setRegForm({ ...regForm, pass: e.target.value })} className="w-full p-4 rounded-2xl bg-white/5 border border-white/10 outline-none focus:border-blue-500 text-sm" />
+                        <input type="password" required placeholder="Şifre tekrar" value={regForm.pass2} onChange={e => setRegForm({ ...regForm, pass2: e.target.value })} className="w-full p-4 rounded-2xl bg-white/5 border border-white/10 outline-none focus:border-blue-500 text-sm" />
+                        <button disabled={authBusy} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 py-4 rounded-2xl font-black uppercase disabled:opacity-50">{authBusy ? 'Kod gönderiliyor...' : 'Kayıt Ol'}</button>
+                    </form>
+                    ) : (
+                    <form onSubmit={verifyCodeAndRegister} className="space-y-4 text-center">
+                        <p className="text-xs text-white/60">{pendingRef.current?.form.email} adresine 6 haneli kod gönderdik.</p>
+                        <input inputMode="numeric" maxLength={6} required placeholder="000000" value={codeInput} onChange={e => setCodeInput(e.target.value.replace(/\D/g, ''))} className="w-full p-4 rounded-2xl bg-white/5 border border-white/10 outline-none focus:border-blue-500 text-center text-2xl font-black tracking-[0.5em]" />
+                        <button disabled={authBusy || codeInput.length !== 6} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 py-4 rounded-2xl font-black uppercase disabled:opacity-50">{authBusy ? 'Bekle...' : 'Doğrula ve Kayıt Ol'}</button>
+                        <button type="button" disabled={cooldown > 0 || authBusy} onClick={() => sendVerificationCode()} className="w-full text-[11px] text-white/50 underline disabled:opacity-40">{cooldown > 0 ? `Tekrar gönder (${cooldown})` : 'Kodu tekrar gönder'}</button>
+                        <button type="button" onClick={() => setRegStep('form')} className="w-full text-[11px] text-white/40">← Geri</button>
+                    </form>
+                    )}
+                </div>
+                </div>
+            );
+
+            const curriculum = getCurriculumForGrade(user?.grade || "5");
+
+            return (
+                <div className="min-h-screen bg-[#070b19] text-white font-sans flex flex-col justify-between">
+                <div>
+                    <header className="p-4 bg-slate-900/60 backdrop-blur-md border-b border-white/5 sticky top-0 z-40">
+                    <div className="max-w-5xl mx-auto flex justify-between items-center">
+                        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => { setView('dashboard'); setSelectedCourse(null); setShowStore(false); setQuiz(null); setAnalysis(null); }}>
+                        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-2xl border border-white/10 shadow-lg transition-transform group-hover:scale-105 ${curAvatar?.color}`}>{curAvatar?.emoji}</div>
+                        <div>
+                            <h2 className="font-black italic text-sm tracking-tighter uppercase text-blue-400 flex items-center gap-1.5">
+                            SEZAN AKADEMİ <span className="bg-blue-500/20 text-blue-300 text-[9px] not-italic px-1.5 py-0.5 rounded font-bold">{user?.grade}. Sınıf</span>
+                            </h2>
+                            <p className="text-[10px] font-bold text-white/50 uppercase">
+                            {user?.name} {user?.isPro && <span className="text-blue-400"> (PRO)</span>}
+                            </p>
+                        </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                        {user?.isSpecial && (
+                            <button onClick={() => setView(view === 'admin' ? 'dashboard' : 'admin')} className="p-2.5 bg-purple-600/20 border border-purple-500/50 text-purple-400 rounded-xl hover:bg-purple-600/40 transition-all flex items-center gap-2 text-xs font-bold" title="Admin Paneli">
+                            <ShieldAlert size={16}/> <span className="hidden md:inline">Yönetim</span>
+                            </button>
+                        )}
+
+                        <button onClick={() => { setView('leaderboard'); setShowStore(false); }} className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 font-bold text-xs ${view === 'leaderboard' ? 'bg-amber-600 border-amber-500 text-slate-900' : 'bg-slate-800 border-white/5 text-amber-400 hover:bg-slate-700'}`}>
+                            <Medal size={18}/> <span className="hidden md:inline">Sıralama</span>
+                        </button>
+
+                        <button onClick={() => { setView('games'); setShowStore(false); }} className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 font-bold text-xs ${view === 'games' ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-800 border-white/5 text-emerald-400 hover:bg-slate-700'}`}>
+                            <Gamepad2 size={18}/> <span className="hidden md:inline">Oyunlar</span>
+                        </button>
+
+                        <button onClick={() => { setShowStore(!showStore); setView('dashboard'); }} className={`p-2.5 rounded-xl border transition-all ${showStore ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-white/5 text-white/70 hover:bg-slate-700'}`} title="Karakter Mağazası">
+                            <ShoppingBag size={18}/>
+                        </button>
+
+                        <button onClick={() => { setView('purchase'); setShowStore(false); }} className={`p-2.5 rounded-xl border transition-all ${view === 'purchase' ? 'bg-pink-600 border-pink-500 text-white' : 'bg-slate-800 border-white/5 text-pink-400 hover:bg-slate-700'}`} title="Satın Al"><Zap size={18}/></button>
+
+                        <button onClick={() => { setView('info'); setShowStore(false); }} className={`p-2.5 rounded-xl border transition-all ${view === 'info' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-white/5 text-white/70 hover:bg-slate-700'}`} title="Hakkında">
+                            <Info size={18}/>
+                        </button>
+                        
+                        <div className="bg-amber-500/10 px-3 py-2 rounded-xl border border-amber-500/20 hidden md:flex items-center gap-1.5">
+                            <Star size={14} className="text-amber-500 fill-amber-500 animate-pulse"/>
+                            <span className="font-black text-amber-400 text-sm tracking-tight">{user?.isSpecial ? 'Sınırsız' : user?.points}</span>
+                        </div>
+
+                        <button onClick={handleLogout} className="p-2.5 bg-slate-800 border border-white/5 rounded-xl text-white/60 hover:text-red-400 hover:bg-red-500/10 transition-all">
+                            <LogOut size={18}/>
+                        </button>
+                        </div>
+                    </div>
+                    </header>
+                {toast && (
+                    <div onClick={() => setToast(null)} className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[92%] max-w-md bg-blue-600 text-white p-4 rounded-2xl shadow-2xl border border-blue-300/30 cursor-pointer">
+                        <p className="text-[10px] font-black uppercase tracking-wider opacity-80 flex items-center gap-1"><Megaphone size={12}/> Yeni Duyuru • {toast.author}</p>
+                        <p className="font-bold text-sm mt-1">{toast.title}</p>
+                        <p className="text-xs opacity-90 mt-0.5 line-clamp-2">{toast.message}</p>
+                    </div>
+                )}
+
+                    <main className="max-w-5xl mx-auto p-4 sm:p-6 pb-24">
+                    {view === 'admin' && user?.isSpecial ? (
+                        <div className="animate-in fade-in slide-in-from-top-4 duration-300">
+                        <div className="mb-8 border-b border-white/10 pb-6">
+                            <h2 className="text-3xl font-black italic uppercase tracking-tighter text-purple-400 flex items-center gap-3">
+                            <ShieldAlert size={32}/> YÖNETİM PANELİ
+                            </h2>
+                            <p className="text-xs text-white/40 font-bold uppercase tracking-wider mt-1">Sistemi ve Öğrencileri Yönet</p>
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-6 mb-6">
+                            {/* KAYIT BİLGİSİ */}
+                        <div className="bg-slate-900/80 border border-purple-500/20 p-6 rounded-3xl h-fit">
+                            <h3 className="font-bold text-sm text-white mb-3 flex items-center gap-2"><Plus size={16} className="text-purple-400"/> Öğrenci Kaydı</h3>
+                            <p className="text-xs text-white/60 leading-relaxed">Öğrenciler artık giriş ekranındaki "Kayıt Ol" sekmesinden e-posta kodu ile kendileri hesap oluşturuyor. Burada sadece listeyi görebilir ve hesap profilini silebilirsin.</p>
+                        </div>
+
+                        {/* KULLANICI LİSTESİ */}
+                            <div className="bg-slate-900/80 border border-white/10 p-6 rounded-3xl flex flex-col h-full min-h-[300px]">
+                                <h3 className="font-bold text-sm text-white mb-4 flex items-center justify-between"><span className="flex items-center gap-2"><Users size={16} className="text-blue-400"/> Sistemdeki Kişiler ({accounts.length})</span><span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">Canlı</span></h3>
+                                <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar max-h-[300px]">
+                                    {accounts.length === 0 ? <p className="text-white/40 text-xs text-center py-10">Henüz kayıtlı kimse bulunmuyor.</p> : null}
+                                    {accounts.map(acc => (
+                                    <div key={acc.id} className="bg-slate-950 p-4 rounded-xl border border-white/5 flex items-center justify-between group hover:border-white/10 transition-all">
+                                        <div className="flex items-center gap-4">
+                                        <div className="relative flex h-3 w-3" title={acc.isOnline ? "Çevrimiçi" : "Çevrimdışı"}>
+                                            {acc.isOnline && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
+                                            <span className={`relative inline-flex rounded-full h-3 w-3 ${acc.isOnline ? 'bg-emerald-500' : 'bg-slate-600'}`}></span>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-sm text-white flex items-center gap-1">{acc.name} {acc.isSpecial ? <ShieldAlert size={12} className="text-amber-500"/> : acc.isPro ? <Zap size={12} className="text-blue-400"/> : null}</h4>
+                                            <p className="text-[10px] text-white/50 uppercase tracking-widest">{acc.grade}. Sınıf</p>
+                                        </div>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                        <span className="text-amber-400 font-bold text-xs hidden sm:flex items-center gap-1"><Star size={12}/> {acc.isSpecial ? 'Sınırsız' : acc.points}</span>
+                                        {!acc.isSpecial && acc.role !== 'admin' && (
+                                    <div className="flex items-center gap-1">
+                                        {acc.status && acc.status !== 'active' && <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg ${acc.status === 'banned' ? 'bg-red-500/20 text-red-400' : 'bg-cyan-500/20 text-cyan-300'}`}>{acc.status === 'banned' ? 'Yasaklı' : 'Dondurulmuş'}</span>}
+                                        <button onClick={() => handleSetStatus(acc.id, acc.status === 'frozen' ? 'active' : 'frozen')} className="text-[10px] font-bold px-2 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20">{acc.status === 'frozen' ? 'Çöz' : 'Dondur'}</button>
+                                        <button onClick={() => handleSetStatus(acc.id, acc.status === 'banned' ? 'active' : 'banned')} className="text-[10px] font-bold px-2 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20">{acc.status === 'banned' ? 'Banı Kaldır' : 'Yasakla'}</button>
+                                    </div>
+                                )}
+                                <button onClick={() => handleDeleteAccount(acc.id)} className="text-white/20 hover:text-red-500 p-2 rounded-lg hover:bg-white/5 transition-all"><X size={16} /></button>
+                                        </div>
+                                    </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* DUYURU YÖNETİMİ */}
+                        <div className="grid md:grid-cols-2 gap-6">
+                            <div className="bg-slate-900/80 border border-blue-500/20 p-6 rounded-3xl h-fit">
+                                <h3 className="font-bold text-sm text-white mb-4 flex items-center gap-2"><Megaphone size={16} className="text-blue-400"/> Tüm Öğrencilere Duyuru Ekle</h3>
+                                <form onSubmit={handleCreateAnnouncement} className="space-y-4">
+                                    <div><label className="text-[10px] text-white/50 uppercase font-bold mb-1 block">Duyuru Başlığı</label><input value={newAnn.title} onChange={e=>setNewAnn({...newAnn, title: e.target.value})} required placeholder="Örn: Yarın Yeni Testler Ekleniyor!" className="w-full p-3 rounded-xl bg-white/5 border border-white/10 outline-none text-xs focus:border-blue-500" /></div>
+                                    <div><label className="text-[10px] text-white/50 uppercase font-bold mb-1 block">Duyuru İçeriği</label><textarea value={newAnn.message} onChange={e=>setNewAnn({...newAnn, message: e.target.value})} required placeholder="Duyuru metnini buraya yazın..." className="w-full p-3 rounded-xl bg-white/5 border border-white/10 outline-none text-xs focus:border-blue-500 h-24 custom-scrollbar"></textarea></div>
+                                    <button className="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-xl font-bold text-xs uppercase transition-all shadow-lg shadow-blue-900/20">Duyuruyu Yayınla</button>
+                                </form>
+                            </div>
+                            <div className="bg-slate-900/80 border border-white/10 p-6 rounded-3xl flex flex-col h-full min-h-[250px]">
+                                <h3 className="font-bold text-sm text-white mb-4 flex items-center justify-between"><span className="flex items-center gap-2">Sistemdeki Duyurular ({announcements.length})</span></h3>
+                                <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar max-h-[250px]">
+                                    {sortedAnnouncements.length === 0 ? <p className="text-white/40 text-xs text-center py-10">Hiç duyuru yok.</p> : null}
+                                    {sortedAnnouncements.map(ann => (
+                                    <div key={ann.id} className="bg-slate-950 p-4 rounded-xl border border-white/5 flex items-start justify-between group">
+                                        <div>
+                                            <h4 className="font-bold text-white text-xs">{ann.title}</h4>
+                                            <p className="text-[10px] text-white/50 mt-1 line-clamp-2">{ann.message}</p>
+                                        </div>
+                                        <button onClick={() => handleDeleteAnnouncement(ann.id)} className="text-white/20 hover:text-red-500 p-2 rounded-lg hover:bg-white/5 transition-all"><Trash2 size={16} /></button>
+                                    </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        </div>
+                    ) : view === 'purchase' ? (
+                        <div className="max-w-md mx-auto mt-16 text-center bg-slate-900/60 border border-pink-500/30 p-10 rounded-[2.5rem]">
+                            <div className="text-6xl mb-4">🛠️</div>
+                            <h2 className="text-2xl font-black uppercase italic text-pink-400 mb-3">Bakımda</h2>
+                            <p className="text-sm text-white/60 mb-6">Satın alma sayfası şu an bakımda. Çok yakında burada olacak!</p>
+                            <button onClick={() => setView('dashboard')} className="px-6 py-3 rounded-2xl bg-slate-800 border border-white/10 font-bold text-xs uppercase">Geri Dön</button>
+                        </div>
+                    ) : view === 'leaderboard' ? (
+                        <div className="max-w-2xl mx-auto py-6 animate-in fade-in slide-in-from-bottom-4">
+                        <div className="text-center mb-10">
+                            <Trophy size={56} className="text-amber-400 mx-auto mb-4 drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]" />
+                            <h2 className="text-3xl font-black italic uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200">Liderlik Tablosu</h2>
+                            <p className="text-xs text-white/50 font-bold uppercase tracking-widest mt-2">En Çok Yıldız Kazanan Öğrenciler</p>
+                        </div>
+                        <div className="space-y-3">
+                            {getLeaderboard.map((l, idx) => (
+                                <div key={l.id} className={`p-5 rounded-[1.5rem] flex items-center justify-between border transition-all ${l.isPro ? 'bg-blue-500/10 border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.1)]' : 'bg-slate-900 border-white/10'}`}>
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-sm shadow-inner ${idx === 0 && l.points > 0 ? 'bg-amber-400 text-slate-900 shadow-amber-200' : 'bg-slate-800 text-white'}`}>{idx + 1}</div>
+                                    <div>
+                                    <h4 className="font-bold text-white flex items-center gap-2">{l.name} {l.isPro && <Zap size={14} className="text-blue-400"/>}</h4>
+                                    <p className="text-[10px] text-white/40 uppercase font-bold">{l.isPro ? 'PRO ÖĞRENCİ' : `${l.grade}. Sınıf Öğrencisi`}</p>
+                                    </div>
+                                </div>
+                                <div className={`font-black flex items-center gap-1.5 text-lg ${l.isPro ? 'text-blue-400' : 'text-white'}`}>
+                                    {l.points} <Star size={16} className={l.isPro ? "fill-blue-400" : "fill-amber-500"}/>
+                                </div>
+                                </div>
+                            ))}
+                            {getLeaderboard.length === 0 && <p className="text-center text-white/40 text-sm mt-10">Henüz kimse giriş yapmadı veya puan kazanamadı.</p>}
+                        </div>
+                        </div>
+                    ) : view === 'info' ? (
+                        <div className="max-w-md mx-auto text-center py-6 animate-in fade-in zoom-in-95">
+                        <h2 className="text-3xl font-black italic mb-8 uppercase text-blue-400 tracking-tighter">Ekibimiz</h2>
+                        <div className="bg-slate-900/80 border border-white/10 p-8 rounded-[2.5rem] space-y-8 shadow-2xl relative overflow-hidden">
+                            <div className="absolute -top-10 -right-10 w-32 h-32 bg-blue-600/10 rounded-full blur-2xl"></div>
+                            <div className="relative z-10"><h3 className="text-[10px] text-blue-400 font-black uppercase tracking-[0.2em] mb-2">Yönetim</h3><p className="font-bold text-white text-lg">Yusuf T.<br/>Selim K.</p></div>
+                            <div className="relative z-10"><h3 className="text-[10px] text-emerald-400 font-black uppercase tracking-[0.2em] mb-2">Destek Ekip</h3><p className="font-bold text-white text-lg">Funda K.<br/>Görkem</p></div>
+                            <div className="relative z-10"><h3 className="text-[10px] text-purple-400 font-black uppercase tracking-[0.2em] mb-2">Tasarım</h3><p className="font-bold text-white text-lg">Yusuf T.<br/>Selim K.<br/>Görkem</p></div>
+                            <div className="pt-6 border-t border-white/10 mt-6 relative z-10"><p className="text-sm font-black italic text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-blue-400 tracking-wider">Sezan Studios Sunar..</p></div>
+                        </div>
+                        </div>
+                    ) : view === 'games' ? (
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        {gameState === 'menu' && (
+                            <div className="text-center py-10 max-w-lg mx-auto">
+                            <div className="w-24 h-24 bg-emerald-500/20 rounded-3xl mx-auto flex items-center justify-center mb-6 border-2 border-emerald-500/30"><Gamepad2 size={48} className="text-emerald-400" /></div>
+                            <h2 className="text-4xl font-black italic uppercase tracking-tighter text-emerald-400 mb-2">OYUN SALONU</h2>
+                            <p className="text-white/60 text-sm mb-10">Sınıf seviyene uygun eğitim oyunları oynayarak eğlen ve yıldız kazan!</p>
+                            <div className="bg-slate-900 border border-white/10 p-6 rounded-3xl text-left hover:border-emerald-500/30 transition-all cursor-pointer group" onClick={startGame}>
+                                <h3 className="font-bold text-lg text-white mb-2 group-hover:text-emerald-400">🚀 Hızlı Matematik</h3>
+                                <p className="text-xs text-white/50 mb-4">Ekrana gelen rastgele işlemleri 60 saniye içinde çözebildiğin kadar hızlı çöz! <br/> <strong className="text-red-400">DİKKAT: Yanlış cevaplarda -6 Puan silinir.</strong></p>
+                                <button className="w-full bg-emerald-600 py-3 rounded-xl font-bold uppercase text-xs">Oyuna Başla</button>
+                            </div>
+                            </div>
+                        )}
+                        {gameState === 'playing' && currentMathQ && (
+                            <div className="max-w-md mx-auto bg-slate-900 border border-white/10 rounded-[3rem] p-8 text-center relative overflow-hidden shadow-2xl">
+                            <div className="absolute top-0 left-0 w-full h-1.5 bg-white/5"><div className="h-full bg-emerald-500 transition-all duration-1000" style={{width: `${(timeLeft/60)*100}%`}}></div></div>
+                            <div className="flex justify-between items-center mb-10 mt-2">
+                                <div className="flex items-center gap-2 text-amber-400 font-bold bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-500/20"><Award size={16}/> Skor: {gameScore}</div>
+                                <div className={`flex items-center gap-2 font-bold bg-white/5 px-3 py-1.5 rounded-xl border border-white/10 ${timeLeft <= 10 ? 'text-red-500 animate-pulse border-red-500/50' : 'text-white'}`}><Timer size={16}/> {timeLeft}s</div>
+                            </div>
+                            <h3 className="text-5xl font-black mb-12 text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-blue-400">{currentMathQ.q}</h3>
+                            <div className="grid grid-cols-2 gap-3">
+                                {currentMathQ.opts.map((opt, i) => (
+                                <button key={i} onClick={() => handleGameAnswer(opt)} className="bg-slate-800 hover:bg-emerald-600 py-6 rounded-2xl text-2xl font-black transition-all active:scale-95 border border-white/5 hover:border-emerald-400">{opt}</button>
+                                ))}
+                            </div>
+                            </div>
+                        )}
+                        {gameState === 'over' && (
+                            <div className="max-w-md mx-auto text-center py-10 animate-in zoom-in-95">
+                            <Trophy size={64} className="text-emerald-500 mx-auto mb-6" />
+                            <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white mb-2">SÜRE BİTTİ!</h2>
+                            <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 mb-8 mt-4 flex justify-around">
+                                <div><p className="text-[10px] text-white/40 uppercase font-bold mb-1">Hesabına Yansıyan (Net)</p><p className={`text-3xl font-black ${gameScore >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{gameScore >= 0 ? `+${gameScore}` : gameScore}</p></div>
+                            </div>
+                            <div className="flex gap-3">
+                                <button onClick={() => setGameState('menu')} className="flex-1 bg-white/5 hover:bg-white/10 py-4 rounded-2xl font-bold uppercase text-xs">Menüye Dön</button>
+                                <button onClick={startGame} className="flex-1 bg-emerald-600 hover:bg-emerald-500 py-4 rounded-2xl font-bold uppercase text-xs">Tekrar Oyna</button>
+                            </div>
+                            </div>
+                        )}
+                        </div>
+                    ) : showStore ? (
+                        <div className="animate-in fade-in duration-300">
+                        <div className="flex items-center justify-between mb-8">
+                            <div><h2 className="text-2xl sm:text-3xl font-black italic text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-300 uppercase tracking-tighter">KARAKTER DOLABI</h2></div>
+                            <button onClick={() => setShowStore(false)} className="p-2.5 bg-slate-800 border border-white/10 rounded-full hover:bg-slate-700 transition-colors"><X size={18}/></button>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            {AVATARS.map(av => {
+                            const isUnlocked = user?.unlocked?.includes(av.id);
+                            const isEquipped = user?.avatar === av.id;
+                            const canAfford = user?.points >= av.price;
+                            return (
+                                <div key={av.id} className={`p-5 rounded-3xl bg-slate-900/60 border transition-all text-center flex flex-col justify-between ${isEquipped ? 'border-blue-500 bg-blue-500/5' : 'border-white/5'}`}>
+                                    <div><div className={`w-16 h-16 mx-auto mb-3 rounded-2xl flex items-center justify-center text-3xl shadow-lg ${av.color}`}>{av.emoji}</div><h4 className="font-black text-sm mb-1">{av.label}</h4><p className="text-[10px] text-white/40 uppercase mb-4">{av.price === 0 ? 'Bedava' : `${av.price} Yıldız`}</p></div>
+                                    {isUnlocked ? <button onClick={() => { setUser({...user, avatar: av.id}); if (sb && user.id && !user.isSpecial) sb.from('profiles').update({ avatar: av.id }).eq('id', user.id).then(() => {}); }} className={`w-full py-2.5 rounded-xl text-xs font-black uppercase ${isEquipped ? 'bg-blue-600 text-white' : 'bg-slate-800 text-white/70'}`}>{isEquipped ? 'Kuşanıldı' : 'Kuşan'}</button> : <button onClick={() => handleBuyAvatar(av)} disabled={!canAfford} className={`w-full py-2.5 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-1 ${canAfford ? 'bg-amber-500 text-slate-950' : 'bg-slate-800/50 text-white/20'}`}><Star size={12} className={canAfford ? "fill-slate-950" : "fill-white/10"} /> {av.price} Aç</button>}
+                                </div>
+                            );
+                            })}
+                        </div>
+                        </div>
+                    ) : analysis ? (
+                        <div className="max-w-md mx-auto py-8 text-center animate-in zoom-in-95 duration-200">
+                        <Trophy size={48} className="text-amber-400 mx-auto mb-6" />
+                        <h2 className="text-3xl font-black italic mb-2 uppercase text-amber-400">Tebrikler!</h2>
+                        <div className="grid grid-cols-2 gap-4 mb-8">
+                            <div className="bg-slate-900/80 p-5 rounded-2xl border border-white/5"><p className="text-[10px] text-white/40 font-bold mb-1 uppercase">DOĞRU CEVAP</p><p className="text-2xl font-black text-amber-400 flex items-center justify-center gap-1">{analysis.correct} / {analysis.total}</p></div>
+                            <div className="bg-slate-900/80 p-5 rounded-2xl border border-white/5"><p className="text-[10px] text-white/40 font-bold mb-1 uppercase">BAŞARI</p><p className="text-2xl font-black text-blue-400">%{analysis.score}</p></div>
+                        </div>
+                        <button onClick={() => {setAnalysis(null); setSelectedCourse(null); setSelectedTopic(null);}} className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase shadow-xl transition-all">Derslere Dön</button>
+                        </div>
+                    ) : quiz ? (
+                        <div className="max-w-2xl mx-auto py-2">
+                        <div className="bg-slate-900/80 backdrop-blur-md p-6 sm:p-10 rounded-[2.5rem] border border-white/10 relative overflow-hidden shadow-2xl">
+                            <div className="absolute top-0 left-0 h-1.5 bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500" style={{width: `${((quiz.current + 1) / quiz.questions.length) * 100}%`}}></div>
+                            <div className="flex justify-between items-center mb-8 pt-2"><span className="bg-blue-500/20 text-blue-300 text-[10px] font-black px-3 py-1 rounded-full uppercase">Soru {quiz.current + 1} / {quiz.questions.length}</span><span className="text-xs text-white/40 font-bold uppercase">{selectedTopic}</span></div>
+                            <h3 className="text-lg sm:text-xl font-bold leading-relaxed text-white mb-8">{quiz.questions[quiz.current].q}</h3>
+                            <div className="space-y-3 mb-6">
+                                {quiz.questions[quiz.current].opts.map((opt, idx) => {
+                                let btnStyle = "bg-white/5 border-white/10 text-white/80"; let icon = <HelpCircle className="w-5 h-5 opacity-40" />;
+                                if (ansState.show) {
+                                    if (opt === ansState.correct) { btnStyle = "bg-emerald-500/20 border-emerald-500 text-emerald-300"; icon = <CheckCircle2 className="w-5 h-5 text-emerald-400" />; } 
+                                    else if (opt === ansState.sel) { btnStyle = "bg-red-500/20 border-red-500 text-red-300"; icon = <XCircle className="w-5 h-5 text-red-400" />; } else { btnStyle = "opacity-40"; icon = null; }
+                                }
+                                return (<button key={idx} onClick={() => handleAnswer(opt)} disabled={ansState.show} className={`w-full p-4 rounded-xl border text-left flex items-center justify-between transition-all duration-200 text-sm font-semibold ${btnStyle}`}><span>{opt}</span>{icon}</button>);
+                                })}
+                            </div>
+                            {ansState.show && (<div className="p-4 bg-blue-950/40 border border-blue-500/20 rounded-2xl animate-in fade-in slide-in-from-bottom-2"><div className="flex gap-2 items-center text-blue-400 font-bold text-xs uppercase mb-1"><Sparkles size={14} /> İpucu</div><p className="text-xs text-white/70">{quiz.questions[quiz.current].ex}</p></div>)}
+                        </div>
+                        </div>
+                    ) : selectedCourse ? (
+                        <div className="animate-in fade-in duration-300">
+                        <button onClick={() => { setSelectedCourse(null); setSelectedTopic(null); }} className="flex items-center gap-2 text-xs font-bold text-white/40 hover:text-white mb-6 uppercase"><ArrowLeft size={16}/> Derslere Dön</button>
+                        <div className="flex items-center gap-4 mb-8"><div className={`p-4 rounded-2xl bg-slate-900 border border-white/10 ${curriculum[selectedCourse]?.color.split(' ')[0]}`}>{curriculum[selectedCourse]?.icon}</div><div><h2 className="text-3xl font-black italic uppercase text-white">{selectedCourse}</h2><p className="text-xs text-white/40 uppercase font-bold">Çalışmak istediğin konuyu seç</p></div></div>
+                        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {curriculum[selectedCourse]?.topics.map((topic, index) => (
+                            <div key={index} className="bg-slate-900/60 border border-white/5 p-6 rounded-3xl flex flex-col justify-between h-full min-h-[160px] group hover:border-blue-500/30 transition-all">
+                                <div><h3 className="font-bold text-lg text-white mb-1">{topic}</h3><p className="text-[10px] text-white/30 uppercase font-bold mb-4 flex items-center gap-1"><LayoutList size={10}/> 5 Soru</p></div>
+                                <div className="flex gap-2 mt-2">
+                                <button onClick={() => { setSelectedTopic(topic); startQuiz(topic, 3); }} className="flex-1 bg-white/5 hover:bg-white/10 py-3 rounded-xl font-bold text-[10px] uppercase">3 Soru Çöz</button>
+                                <button onClick={() => { setSelectedTopic(topic); startQuiz(topic, 5); }} className="flex-1 bg-blue-600 hover:bg-blue-500 py-3 rounded-xl font-bold text-[10px] uppercase flex items-center justify-center gap-1.5"><Play size={10} className="fill-white" /> Hepsini Çöz</button>
+                                </div>
+                            </div>
+                            ))}
+                        </div>
+                        </div>
+                    ) : (
+                        <div className="animate-in fade-in duration-300">
+                        <div className="mb-8"><h2 className="text-2xl sm:text-3xl font-black italic uppercase tracking-tighter">Hoş Geldin, {user?.name.split(' ')[0]}!</h2><p className="text-xs text-white/40 font-bold uppercase tracking-wider">{user?.grade}. Sınıf Dersleri</p></div>
+                        
+                        {/* DUYURU PANOSU (HERKES GÖRÜR) */}
+                        {sortedAnnouncements.length > 0 && (
+                            <div className="mb-8 bg-blue-900/20 border border-blue-500/30 p-6 rounded-[2rem] relative overflow-hidden">
+                                <div className="flex items-center gap-2 text-blue-400 mb-4 font-black uppercase text-sm">
+                                   <Megaphone size={18} /> GÜNCEL DUYURULAR
+                                </div>
+                                <div className="space-y-3">
+                                   {sortedAnnouncements.map(ann => (
+                                       <div key={ann.id} className="bg-slate-900/80 p-4 rounded-xl border border-blue-500/10">
+                                           <h4 className="font-bold text-white text-sm">{ann.title}</h4>
+                                           <p className="text-xs text-white/70 mt-1.5 leading-relaxed">{ann.message}</p>
+                                           <p className="text-[9px] text-white/30 mt-3 text-right uppercase tracking-wider font-bold">{new Date(ann.date).toLocaleDateString('tr-TR')} - {ann.author}</p>
+                                       </div>
+                                   ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="grid sm:grid-cols-2 gap-4">
+                            {Object.entries(curriculum).map(([courseName, item]) => (
+                            <div key={courseName} onClick={() => setSelectedCourse(courseName)} className={`p-6 rounded-[2rem] border bg-slate-900/40 cursor-pointer flex items-center justify-between group ${item.color}`}>
+                                <div className="flex items-center gap-4"><div className="p-4 rounded-2xl bg-slate-950/60 border border-white/5">{item.icon}</div><div><h3 className="font-black italic text-lg uppercase tracking-tight">{courseName}</h3><p className="text-xs opacity-60 font-semibold">{item.topics.length} Konu Aktif</p></div></div><ChevronRight className="w-5 h-5 opacity-40 group-hover:translate-x-1 transition-transform" />
+                            </div>
+                            ))}
+                        </div>
+                        </div>
+                    )}
+                    </main>
+                </div>
+
+                {/* ASİSTAN */}
+                <div className="fixed bottom-4 right-4 z-50">
+                    {!aiOpen ? (
+                    <button onClick={() => setAiOpen(true)} className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-sm px-5 py-4 rounded-2xl shadow-2xl hover:scale-105 transition-all"><Bot size={20} className="animate-pulse" /><span className="hidden sm:inline">Sezan TMD</span></button>
+                    ) : (
+                    <div className="w-[320px] sm:w-[360px] h-[450px] bg-slate-900 border border-white/10 rounded-[2rem] shadow-2xl overflow-hidden flex flex-col justify-between animate-in slide-in-from-bottom-5">
+                        <div className="p-4 bg-slate-950 border-b border-white/5 flex items-center justify-between">
+                        <div className="flex items-center gap-2"><div className="w-8 h-8 bg-blue-600/20 text-blue-400 rounded-lg flex items-center justify-center"><Bot size={18} /></div><div><h4 className="font-black text-xs text-blue-400 uppercase tracking-wider">Sezan TMD Asistanı</h4><p className="text-[9px] text-emerald-400 font-bold flex items-center gap-1"><span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span> Çevrimiçi</p></div></div>
+                        <button onClick={() => setAiOpen(false)} className="p-1 text-white/50 hover:text-white transition-all"><X size={16}/></button>
+                        </div>
+                        <div ref={scrollRef} className="flex-1 p-4 overflow-y-auto space-y-3 text-xs custom-scrollbar">
+                        {chat.map((msg, i) => (<div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[85%] p-3 rounded-xl leading-relaxed ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white/5 text-white/80 rounded-bl-none border border-white/5'}`}>{msg.text}</div></div>))}
+                        {aiLoading && <div className="flex justify-start"><div className="bg-white/5 p-3 rounded-xl rounded-bl-none border flex items-center gap-2"><span className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce"></span><span className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce delay-150"></span><span className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce delay-300"></span></div></div>}
+                        </div>
+                        <div className="p-3 bg-slate-950 border-t border-white/5 flex gap-2">
+                        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' ? askAi() : null} placeholder="Soru sor..." className="flex-1 p-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-blue-500 text-xs text-white" />
+                        <button onClick={askAi} disabled={aiLoading || !input.trim()} className="p-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl"><Send size={14}/></button>
+                        </div>
+                    </div>
+                    )}
+                </div>
+                </div>
+            );
+        }
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    
+        </script>
+    </body>
+</html>
+
+
