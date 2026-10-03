@@ -964,10 +964,10 @@ EXT(5, "Fen Bilimleri", "Güneş, Dünya ve Ay", [
         };
 
         const SHOP_ITEMS = [
-            { id: 'boost', emoji: '⚡', label: '2x Puan (10 dk)', desc: '10 dakika boyunca kazandığın puanlar iki katı olur.', price: 60 },
-            { id: 'shield', emoji: '🛡️', label: 'Can Kalkanı', desc: 'Bir yanlış cevapta puanın silinmez.', price: 40 },
-            { id: 'time', emoji: '⏱️', label: 'Ekstra Süre', desc: 'Bir sonraki oyununda +15 saniye.', price: 30 },
-            { id: 'box', emoji: '🎁', label: 'Gizemli Kutu', desc: 'İçinden ne çıkacağı belli olmaz!', price: 35 }
+            { id: 'boost', emoji: '⚡', label: '2x Puan (10 dk)', desc: '10 dakika boyunca kazandığın puanlar iki katı olur.', price: 600 },
+            { id: 'shield', emoji: '🛡️', label: 'Can Kalkanı', desc: 'Bir yanlış cevapta puanın silinmez.', price: 400 },
+            { id: 'time', emoji: '⏱️', label: 'Ekstra Süre', desc: 'Bir sonraki oyununda +15 saniye.', price: 300 },
+            { id: 'box', emoji: '🎁', label: 'Gizemli Kutu', desc: 'İçinden ne çıkacağı belli olmaz!', price: 350 }
         ];
 
         function RaceGame({ getQuestion, onPoints, penalty, onFinish, onRestart, onExit, extraTime }) {
@@ -1372,6 +1372,145 @@ EXT(5, "Fen Bilimleri", "Güneş, Dünya ve Ay", [
                 .sort((a, b) => (b.points || 0) - (a.points || 0))
                 ;
             }, [accounts]);
+
+
+            // --- ARKADAŞLIK / MESAJ / YÖNETİCİ ARAÇLARI ---
+            const [fr, setFr] = useState([]);
+            const [chatWith, setChatWith] = useState(null);
+            const [dms, setDms] = useState([]);
+            const [dmInput, setDmInput] = useState('');
+            const [unread, setUnread] = useState({});
+            const [friendTab, setFriendTab] = useState('list');
+            const [friendQuery, setFriendQuery] = useState('');
+            const [notice, setNotice] = useState(null);
+            const [giveModal, setGiveModal] = useState(null);
+            const [giveForm, setGiveForm] = useState({ pts: '', item: 'boost', qty: 1 });
+            const chatWithRef = useRef(null);
+            const dmScrollRef = useRef(null);
+            const totalUnread = Object.values(unread).reduce((a, b) => a + b, 0);
+            const nameOf = (id) => (accounts.find(a => a.id === id) || {}).name || 'Bilinmeyen';
+            const accOf = (id) => accounts.find(a => a.id === id);
+
+            const loadSocial = async () => {
+                if (!sb || !user?.id || user.isSpecial) return;
+                const { data: f } = await sb.from('friendships').select('*');
+                if (f) setFr(f);
+                const { data: u } = await sb.from('messages').select('from_id').eq('to_id', user.id).eq('read', false);
+                if (u) { const c = {}; u.forEach(m => { c[m.from_id] = (c[m.from_id] || 0) + 1; }); setUnread(c); }
+            };
+            const loadDms = async (fid) => {
+                if (!sb || !user?.id || !fid) return;
+                const me = user.id;
+                const { data } = await sb.from('messages').select('*')
+                    .or(`and(from_id.eq.${me},to_id.eq.${fid}),and(from_id.eq.${fid},to_id.eq.${me})`)
+                    .order('created_at', { ascending: true }).limit(200);
+                if (data) setDms(data);
+            };
+            const markRead = async (fid) => {
+                setUnread(u => { const n = { ...u }; delete n[fid]; return n; });
+                await sb.rpc('mark_read', { friend: fid });
+            };
+            const claimGifts = async () => {
+                if (!sb || !user?.id || user.isSpecial) return;
+                const { data, error } = await sb.rpc('claim_gifts');
+                if (error || !data || !data.length) return;
+                const lines = []; let syncPts = false;
+                data.forEach(g => {
+                    const q = g.qty || 1;
+                    if (g.item === 'points') { syncPts = true; lines.push(q >= 0 ? `⭐ +${q} puan` : `⭐ ${q} puan`); }
+                    else if (g.item === 'reset') { syncPts = true; lines.push('♻️ Puanların sıfırlandı'); }
+                    else if (g.item === 'boost') { setBoostUntil(b => Math.max(Date.now(), b) + q * 10 * 60 * 1000); lines.push(`⚡ ${q} × 2x Puan (10 dk)`); }
+                    else if (g.item === 'shield') { setInv(i => ({ ...i, shield: (i.shield || 0) + q })); lines.push(`🛡️ ${q} Can Kalkanı`); }
+                    else if (g.item === 'time') { setInv(i => ({ ...i, time: (i.time || 0) + q })); lines.push(`⏱️ ${q} Ekstra Süre`); }
+                    else if (g.item === 'box') { setGiftBox({ opened: false }); lines.push('🎁 Gizemli Kutu'); }
+                    else if (g.item.startsWith('avatar:')) {
+                        const id = g.item.slice(7); const av = AVATARS.find(a => a.id === id);
+                        const cur = userRef.current || user;
+                        const nu = [...new Set([...(cur.unlocked || ['standard']), id])];
+                        userRef.current = { ...cur, unlocked: nu };
+                        setUser(u => ({ ...u, unlocked: nu }));
+                        sb.from('profiles').update({ unlocked: nu }).eq('id', cur.id).then(() => {});
+                        lines.push(`${av ? av.emoji + ' ' + av.label : id} karakteri`);
+                    }
+                });
+                if (syncPts) {
+                    const { data: p } = await sb.from('profiles').select('points').eq('id', user.id).single();
+                    if (p) { userRef.current = { ...(userRef.current || user), points: p.points || 0 }; setUser(u => ({ ...u, points: p.points || 0 })); }
+                }
+                setNotice({ title: `${data[0].from_name || 'Yönetici'} sana gönderdi`, lines });
+            };
+
+            useEffect(() => {
+                if (!sb || !user?.id || user.isSpecial) return;
+                loadSocial(); claimGifts();
+                const ch = sb.channel('sezan-social-' + user.id)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, () => loadSocial())
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (p) => {
+                        loadSocial();
+                        if (chatWithRef.current) {
+                            loadDms(chatWithRef.current);
+                            if (p.new && p.new.to_id === user.id && p.new.from_id === chatWithRef.current) markRead(chatWithRef.current);
+                        }
+                    })
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'gifts' }, () => claimGifts())
+                    .subscribe();
+                const poll = setInterval(() => { loadSocial(); claimGifts(); if (chatWithRef.current) loadDms(chatWithRef.current); }, 20000);
+                return () => { sb.removeChannel(ch); clearInterval(poll); };
+            }, [user?.id]);
+
+            useEffect(() => { if (dmScrollRef.current) dmScrollRef.current.scrollTop = dmScrollRef.current.scrollHeight; }, [dms, chatWith]);
+            useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(null), 9000); return () => clearTimeout(t); }, [notice]);
+
+            const relWith = (oid) => fr.find(r => (r.a === user?.id && r.b === oid) || (r.b === user?.id && r.a === oid));
+            const sendRequest = async (oid) => {
+                const { error } = await sb.from('friendships').insert({ a: user.id, b: oid, status: 'pending' });
+                if (error) return alert('İstek gönderilemedi: ' + error.message);
+                loadSocial(); setNotice({ title: 'Arkadaşlık isteği gönderildi', lines: ['✅ ' + nameOf(oid)] });
+            };
+            const acceptReq = async (r) => { const { error } = await sb.from('friendships').update({ status: 'accepted' }).eq('id', r.id); if (error) alert(error.message); loadSocial(); };
+            const removeRel = async (r, msg) => {
+                if (msg && !window.confirm(msg)) return;
+                const { error } = await sb.from('friendships').delete().eq('id', r.id);
+                if (error) alert(error.message);
+                if (chatWithRef.current && (r.a === chatWithRef.current || r.b === chatWithRef.current)) closeChat();
+                loadSocial();
+            };
+            const openChat = (fid) => { chatWithRef.current = fid; setChatWith(fid); setDms([]); setDmInput(''); loadDms(fid); markRead(fid); };
+            const closeChat = () => { chatWithRef.current = null; setChatWith(null); setDms([]); };
+            const sendDm = async () => {
+                const body = dmInput.trim(); if (!body || !chatWith) return;
+                setDmInput('');
+                setDms(d => [...d, { id: 'tmp' + Date.now(), from_id: user.id, to_id: chatWith, body, created_at: new Date().toISOString() }]);
+                const { error } = await sb.from('messages').insert({ from_id: user.id, to_id: chatWith, body });
+                if (error) { alert('Mesaj gönderilemedi: ' + error.message); setDmInput(body); }
+                loadDms(chatWith);
+            };
+
+            const adminDone = (text, patch) => {
+                if (patch) setAccounts(prev => prev.map(a => (a.id === giveModal.id ? { ...a, ...patch } : a)));
+                if (patch) setGiveModal(m => ({ ...m, ...patch }));
+                setNotice({ title: 'Yönetici işlemi', lines: [text] });
+            };
+            const adminPoints = async (sign) => {
+                const n = parseInt(giveForm.pts); if (!n || n <= 0) return alert('Önce bir puan sayısı yaz.');
+                const { error } = await sb.rpc('admin_add_points', { target: giveModal.id, amount: sign * n });
+                if (error) return alert('Yapılamadı: ' + error.message);
+                adminDone(`✅ ${giveModal.name}: ${sign > 0 ? '+' : '-'}${n} puan`, { points: Math.max(0, (giveModal.points || 0) + sign * n) });
+                setGiveForm(f => ({ ...f, pts: '' }));
+            };
+            const adminReset = async () => {
+                if (!window.confirm(giveModal.name + ' kişisinin puanı sıfırlansın mı?')) return;
+                const { error } = await sb.rpc('admin_reset_points', { target: giveModal.id });
+                if (error) return alert('Yapılamadı: ' + error.message);
+                adminDone(`♻️ ${giveModal.name}: puan sıfırlandı`, { points: 0 });
+            };
+            const adminGiveItem = async () => {
+                const one = giveForm.item === 'box' || giveForm.item.startsWith('avatar:');
+                const qty = one ? 1 : Math.max(1, Math.min(50, parseInt(giveForm.qty) || 1));
+                const { error } = await sb.rpc('admin_give_item', { target: giveModal.id, item: giveForm.item, qty });
+                if (error) return alert('Yapılamadı: ' + error.message);
+                adminDone(`🎁 ${giveModal.name} kişisine verildi (×${qty})`);
+            };
 
             const sortedAnnouncements = useMemo(() => {
                 return [...announcements].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -1949,6 +2088,13 @@ const generateMathQuestion = () => {
                             <Medal size={18}/> <span className="hidden md:inline">Sıralama</span>
                         </button>
 
+                        {!user?.isSpecial && (
+                        <button onClick={() => { setView('friends'); setShowStore(false); }} className={`relative p-2.5 rounded-xl border transition-all flex items-center gap-2 font-bold text-xs ${view === 'friends' ? 'bg-pink-600 border-pink-500 text-white' : 'bg-slate-800 border-white/5 text-pink-300 hover:bg-slate-700'}`}>
+                            <Users size={18}/> <span className="hidden md:inline">Arkadaşlar</span>
+                            {totalUnread > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center">{totalUnread}</span>}
+                        </button>
+                        )}
+
                         <button onClick={() => { setView('games'); setShowStore(false); }} className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 font-bold text-xs ${view === 'games' ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-800 border-white/5 text-emerald-400 hover:bg-slate-700'}`}>
                             <Gamepad2 size={18}/> <span className="hidden md:inline">Oyunlar</span>
                         </button>
@@ -1991,6 +2137,42 @@ const generateMathQuestion = () => {
                                     <button onClick={() => setGiftBox(null)} className="bg-amber-500 text-slate-900 font-black uppercase text-xs px-8 py-3 rounded-2xl">Harika!</button>
                                 </div>
                             )}
+                        </div>
+                    </div>
+                )}
+                {notice && (
+                    <div onClick={() => setNotice(null)} className="fixed top-4 left-1/2 -translate-x-1/2 z-[110] w-[92%] max-w-md bg-emerald-600 text-white p-4 rounded-2xl shadow-2xl border border-emerald-300/30 cursor-pointer">
+                        <p className="font-black text-sm">🎁 {notice.title}</p>
+                        {notice.lines.map((l, i) => <p key={i} className="text-xs opacity-95 mt-1">{l}</p>)}
+                    </div>
+                )}
+                {giveModal && user?.isSpecial && (
+                    <div className="fixed inset-0 z-[120] bg-black/70 flex items-center justify-center p-4" onClick={() => setGiveModal(null)}>
+                        <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm bg-slate-900 border border-amber-500/30 rounded-3xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+                            <div className="flex items-start justify-between">
+                                <div><h3 className="font-black text-lg text-amber-300">{giveModal.name}</h3><p className="text-xs text-white/50">Şu an: ⭐ {giveModal.points || 0} puan</p></div>
+                                <button onClick={() => setGiveModal(null)} className="p-1 text-white/50"><X size={18}/></button>
+                            </div>
+                            <div className="space-y-2">
+                                <p className="text-[11px] font-black uppercase text-white/50">Puan</p>
+                                <input type="number" min="1" value={giveForm.pts} onChange={(e) => setGiveForm({ ...giveForm, pts: e.target.value })} placeholder="Kaç puan?" className="w-full p-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-amber-500 text-sm" />
+                                <div className="flex gap-2">
+                                    <button onClick={() => adminPoints(1)} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-black">➕ Puan Ver</button>
+                                    <button onClick={() => adminPoints(-1)} className="flex-1 py-2.5 rounded-xl bg-red-600/80 hover:bg-red-500 text-xs font-black">➖ Puan Al</button>
+                                </div>
+                                <button onClick={adminReset} className="w-full py-2.5 rounded-xl bg-slate-800 border border-red-500/40 text-red-300 text-xs font-black">♻️ Puanı Sıfırla</button>
+                            </div>
+                            <div className="space-y-2 border-t border-white/10 pt-4">
+                                <p className="text-[11px] font-black uppercase text-white/50">Eşya / Karakter Ver</p>
+                                <select value={giveForm.item} onChange={(e) => setGiveForm({ ...giveForm, item: e.target.value })} className="w-full p-3 bg-slate-950 border border-white/10 rounded-xl text-sm outline-none">
+                                    {SHOP_ITEMS.map(it => <option key={it.id} value={it.id}>{it.emoji} {it.label}</option>)}
+                                    {AVATARS.filter(a => a.price > 0).map(a => <option key={a.id} value={'avatar:' + a.id}>{a.emoji} Karakter: {a.label}</option>)}
+                                </select>
+                                {!(giveForm.item === 'box' || giveForm.item.startsWith('avatar:')) && (
+                                    <input type="number" min="1" max="50" value={giveForm.qty} onChange={(e) => setGiveForm({ ...giveForm, qty: e.target.value })} placeholder="Adet" className="w-full p-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-amber-500 text-sm" />
+                                )}
+                                <button onClick={adminGiveItem} className="w-full py-2.5 rounded-xl bg-amber-500 text-slate-900 text-xs font-black uppercase">🎁 Gönder</button>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -2041,6 +2223,7 @@ const generateMathQuestion = () => {
                                         {!acc.isSpecial && acc.role !== 'admin' && (
                                     <div className="flex items-center gap-1">
                                         {acc.status && acc.status !== 'active' && <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg ${acc.status === 'banned' ? 'bg-red-500/20 text-red-400' : 'bg-cyan-500/20 text-cyan-300'}`}>{acc.status === 'banned' ? 'Yasaklı' : 'Dondurulmuş'}</span>}
+                                        <button onClick={() => { setGiveModal(acc); setGiveForm({ pts: '', item: 'boost', qty: 1 }); }} className="text-[10px] font-bold px-2 py-1.5 rounded-lg bg-amber-500/15 text-amber-300 hover:bg-amber-500/25">🎁 Ver</button>
                                         <button onClick={() => handleSetStatus(acc.id, acc.status === 'frozen' ? 'active' : 'frozen')} className="text-[10px] font-bold px-2 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20">{acc.status === 'frozen' ? 'Çöz' : 'Dondur'}</button>
                                         <button onClick={() => handleSetStatus(acc.id, acc.status === 'banned' ? 'active' : 'banned')} className="text-[10px] font-bold px-2 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20">{acc.status === 'banned' ? 'Banı Kaldır' : 'Yasakla'}</button>
                                     </div>
@@ -2117,6 +2300,114 @@ const generateMathQuestion = () => {
                             <h2 className="text-2xl font-black uppercase italic text-pink-400 mb-3">Bakımda</h2>
                             <p className="text-sm text-white/60 mb-6">Satın alma sayfası şu an bakımda. Çok yakında burada olacak!</p>
                             <button onClick={() => setView('dashboard')} className="px-6 py-3 rounded-2xl bg-slate-800 border border-white/10 font-bold text-xs uppercase">Geri Dön</button>
+                        </div>
+                    ) : view === 'friends' && !user?.isSpecial ? (
+                        <div className="max-w-2xl mx-auto py-4 animate-in fade-in slide-in-from-bottom-4">
+                        {chatWith ? (
+                            <div className="bg-slate-900/80 border border-white/10 rounded-3xl overflow-hidden flex flex-col h-[72vh]">
+                                <div className="p-4 bg-slate-950 border-b border-white/5 flex items-center gap-3">
+                                    <button onClick={closeChat} className="p-2 bg-slate-800 border border-white/10 rounded-xl"><ArrowLeft size={16}/></button>
+                                    <span className={`w-2.5 h-2.5 rounded-full ${accOf(chatWith)?.isOnline ? 'bg-emerald-400' : 'bg-white/20'}`}></span>
+                                    <div className="flex-1"><h3 className="font-black text-sm">{nameOf(chatWith)}</h3><p className="text-[10px] text-white/40">{accOf(chatWith)?.isOnline ? 'Çevrimiçi' : 'Çevrimdışı'}</p></div>
+                                </div>
+                                <div ref={dmScrollRef} className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                                    {dms.length === 0 && <p className="text-center text-white/40 text-xs mt-10">Henüz mesaj yok. İlk mesajı sen yaz! 👋</p>}
+                                    {dms.map(m => (
+                                        <div key={m.id} className={`flex ${m.from_id === user.id ? 'justify-end' : 'justify-start'}`}>
+                                            <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm break-words ${m.from_id === user.id ? 'bg-blue-600 rounded-br-md' : 'bg-white/10 rounded-bl-md'}`}>
+                                                {m.body}
+                                                <span className="block text-[9px] opacity-50 mt-0.5 text-right">{new Date(m.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="p-3 bg-slate-950 flex gap-2">
+                                    <input value={dmInput} maxLength={1000} onChange={(e) => setDmInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' ? sendDm() : null} placeholder="Mesaj yaz..." className="flex-1 p-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-pink-500 text-sm text-white" />
+                                    <button onClick={sendDm} disabled={!dmInput.trim()} className="p-3 bg-pink-600 hover:bg-pink-500 disabled:opacity-40 rounded-xl"><Send size={16}/></button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div>
+                                <div className="text-center mb-6">
+                                    <Users size={48} className="text-pink-400 mx-auto mb-3" />
+                                    <h2 className="text-3xl font-black italic uppercase tracking-tighter text-pink-300">Arkadaşlar</h2>
+                                    <p className="text-xs text-white/40 font-bold uppercase tracking-wider mt-1">Arkadaş ekle • Sohbet et</p>
+                                </div>
+                                <div className="flex gap-2 mb-5 bg-white/5 p-1 rounded-2xl">
+                                    <button onClick={() => setFriendTab('list')} className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase ${friendTab === 'list' ? 'bg-pink-600' : 'text-white/50'}`}>Arkadaşlarım</button>
+                                    <button onClick={() => setFriendTab('add')} className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase ${friendTab === 'add' ? 'bg-pink-600' : 'text-white/50'}`}>Arkadaş Ekle</button>
+                                </div>
+                                {friendTab === 'list' ? (
+                                    <div className="space-y-5">
+                                        {fr.filter(r => r.status === 'pending' && r.b === user.id).length > 0 && (
+                                            <div>
+                                                <h4 className="text-[11px] font-black uppercase text-amber-300 mb-2">Gelen İstekler</h4>
+                                                <div className="space-y-2">
+                                                    {fr.filter(r => r.status === 'pending' && r.b === user.id).map(r => (
+                                                        <div key={r.id} className="bg-slate-900/80 border border-amber-500/30 p-3 rounded-2xl flex items-center justify-between gap-2">
+                                                            <span className="font-bold text-sm">{nameOf(r.a)}</span>
+                                                            <div className="flex gap-2">
+                                                                <button onClick={() => acceptReq(r)} className="text-[11px] font-black px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500">Kabul</button>
+                                                                <button onClick={() => removeRel(r)} className="text-[11px] font-black px-3 py-2 rounded-xl bg-slate-800 text-white/60">Reddet</button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div>
+                                            <h4 className="text-[11px] font-black uppercase text-white/50 mb-2">Arkadaşlarım ({fr.filter(r => r.status === 'accepted').length})</h4>
+                                            <div className="space-y-2">
+                                                {fr.filter(r => r.status === 'accepted').length === 0 && <p className="text-center text-white/40 text-sm py-8">Henüz arkadaşın yok. “Arkadaş Ekle” sekmesinden istek gönder! 🤝</p>}
+                                                {fr.filter(r => r.status === 'accepted').map(r => { const oid = r.a === user.id ? r.b : r.a; const o = accOf(oid); const av = AVATARS.find(x => x.id === (o?.avatar || 'standard')); return (
+                                                    <div key={r.id} className="bg-slate-900/80 border border-white/10 p-3 rounded-2xl flex items-center justify-between gap-2">
+                                                        <div className="flex items-center gap-3 min-w-0">
+                                                            <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center text-xl ${av?.color || 'bg-slate-700'}`}>{av?.emoji || '👨‍🎓'}<span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-slate-900 ${o?.isOnline ? 'bg-emerald-400' : 'bg-slate-600'}`}></span></div>
+                                                            <div className="min-w-0"><p className="font-bold text-sm truncate">{nameOf(oid)}</p><p className="text-[10px] text-white/40">{o?.isOnline ? 'Çevrimiçi' : 'Çevrimdışı'}</p></div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <button onClick={() => openChat(oid)} className="relative text-[11px] font-black px-3 py-2 rounded-xl bg-pink-600 hover:bg-pink-500">💬 Sohbet{unread[oid] > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-[10px] rounded-full flex items-center justify-center">{unread[oid]}</span>}</button>
+                                                            <button onClick={() => removeRel(r, nameOf(oid) + ' arkadaşlıktan çıkarılsın mı?')} className="text-white/25 hover:text-red-400 p-2"><X size={14}/></button>
+                                                        </div>
+                                                    </div>
+                                                ); })}
+                                            </div>
+                                        </div>
+                                        {fr.filter(r => r.status === 'pending' && r.a === user.id).length > 0 && (
+                                            <div>
+                                                <h4 className="text-[11px] font-black uppercase text-white/40 mb-2">Gönderilen İstekler</h4>
+                                                <div className="space-y-2">
+                                                    {fr.filter(r => r.status === 'pending' && r.a === user.id).map(r => (
+                                                        <div key={r.id} className="bg-slate-900/60 border border-white/5 p-3 rounded-2xl flex items-center justify-between">
+                                                            <span className="text-sm text-white/70">{nameOf(r.b)} <span className="text-[10px] text-white/30">• bekliyor</span></span>
+                                                            <button onClick={() => removeRel(r)} className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-slate-800 text-white/50">İptal</button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <input value={friendQuery} onChange={(e) => setFriendQuery(e.target.value)} placeholder="İsimle ara..." className="w-full p-3 mb-3 bg-white/5 border border-white/10 rounded-2xl outline-none focus:border-pink-500 text-sm" />
+                                        <div className="space-y-2">
+                                            {accounts.filter(a => !a.isSpecial && a.role !== 'admin' && a.id !== user.id && a.status !== 'banned' && (a.name || '').toLowerCase().includes(friendQuery.trim().toLowerCase())).slice(0, 40).map(a => { const r = relWith(a.id); const av = AVATARS.find(x => x.id === (a.avatar || 'standard')); return (
+                                                <div key={a.id} className="bg-slate-900/80 border border-white/10 p-3 rounded-2xl flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${av?.color || 'bg-slate-700'}`}>{av?.emoji || '👨‍🎓'}</div>
+                                                        <div className="min-w-0"><p className="font-bold text-sm truncate">{a.name}</p><p className="text-[10px] text-white/40">{a.grade ? a.grade + '. sınıf' : ''}</p></div>
+                                                    </div>
+                                                    {!r ? <button onClick={() => sendRequest(a.id)} className="text-[11px] font-black px-3 py-2 rounded-xl bg-pink-600 hover:bg-pink-500">➕ Ekle</button>
+                                                        : r.status === 'accepted' ? <span className="text-[11px] font-black text-emerald-400">✓ Arkadaşsınız</span>
+                                                        : r.a === user.id ? <span className="text-[11px] font-bold text-white/40">İstek gönderildi</span>
+                                                        : <button onClick={() => acceptReq(r)} className="text-[11px] font-black px-3 py-2 rounded-xl bg-emerald-600">Kabul Et</button>}
+                                                </div>
+                                            ); })}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                         </div>
                     ) : view === 'leaderboard' ? (
                         <div className="max-w-2xl mx-auto py-6 animate-in fade-in slide-in-from-bottom-4">
